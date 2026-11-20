@@ -1044,38 +1044,19 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
                   style={{ background: "linear-gradient(0deg, rgba(8,11,15,.86) 0, rgba(11,14,20,.18) 26%, transparent 48%)" }} />
               )}
 
-              {/* 竖屏下观看横屏视频：快捷「放大铺满 / 完整显示 / 全屏横屏」与双指缩放复位胶囊 */}
+              {/* 竖屏横屏视频：居中全屏观看与双指缩放复位胶囊 */}
               {isActive && !fs && !clean && !isDesktop && (isLandscapeVideo || zoom.scale > 1.05) && (
                 <div
                   className="absolute left-1/2 -translate-x-1/2 z-20 flex items-center gap-2"
                   style={{ top: "64%" }}>
                   {isLandscapeVideo && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (zoom.scale > 1.05) {
-                            setZoom({ scale: 1, x: 0, y: 0, gesturing: false });
-                            setPortraitFit("contain");
-                          } else {
-                            setPortraitFit((f) => (f === "contain" ? "cover" : "contain"));
-                          }
-                        }}
-                        className="hg-chip-strong backdrop-blur-md px-3 h-7 rounded-full text-[11.5px] font-semibold flex items-center gap-1.5 pressable elev-1">
-                        {zoom.scale > 1.05
-                          ? `还原缩放 (${zoom.scale.toFixed(1)}x)`
-                          : portraitFit === "contain"
-                            ? "放大铺满"
-                            : "完整适应"}
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="全屏观看"
-                        onClick={enterFs}
-                        className="hg-chip-strong backdrop-blur-md px-2.5 h-8 rounded-full text-[12px] font-semibold flex items-center gap-1.5 pressable elev-1">
-                        <IRotatePhone size={16} strokeWidth={1.5} />全屏观看
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      aria-label="全屏观看"
+                      onClick={enterFs}
+                      className="hg-chip-strong backdrop-blur-md px-2.5 h-8 rounded-full text-[12px] font-semibold flex items-center gap-1.5 pressable elev-1">
+                      <IRotatePhone size={16} strokeWidth={1.5} />全屏观看
+                    </button>
                   )}
                   {!isLandscapeVideo && zoom.scale > 1.05 && (
                     <button
