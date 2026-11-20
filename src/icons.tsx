@@ -27,6 +27,7 @@ export const IStarF = S(<path d="m12 2.8 2.8 5.7 6.3.9c.6.1.9.9.4 1.3l-4.5 4.4 1
 export const ICommentF = S(<path d="M12 2.8c5.4 0 9.8 3.9 9.8 8.8s-4.4 8.8-9.8 8.8c-.9 0-1.8-.1-2.6-.3-1.2 1-2.9 1.8-5 1.9-.5 0-.8-.5-.5-.9.8-1.1 1.3-2.3 1.4-3.5C3.4 16 2.2 13.9 2.2 11.6c0-4.9 4.4-8.8 9.8-8.8Z" />, true);
 export const IComment = S(<path d="M12 3.4c5 0 9.2 3.6 9.2 8.2S17 19.8 12 19.8c-.9 0-1.8-.1-2.6-.3-1.1 1-2.7 1.7-4.6 1.8.7-1 1.2-2.2 1.3-3.4-2-1.5-3.3-3.6-3.3-6.1 0-4.6 4.2-8.4 9.2-8.4Z" />);
 export const IExpand = S(<><path d="M8.5 3.5H3.5v5" /><path d="M15.5 3.5h5v5" /><path d="M8.5 20.5h-5v-5" /><path d="M15.5 20.5h5v-5" /></>);
+export const IRotatePhone = S(<><path d="M9.2 18.4V5.2c0-1 .8-1.9 1.8-2.1l5.6-1c1.3-.2 2.4.7 2.5 2l.9 12.4c.1 1.2-.7 2.2-1.9 2.4l-2 .3" /><rect x="4.1" y="7" width="8.1" height="14.2" rx="1.8" transform="rotate(-3 8.15 14.1)" /><path d="M7.1 4.8C7.7 2.5 10 1.2 12.2 1.5M6.8 2.2 7 5l2.6-.7M7 9.3h2" /></>);
 export const ICompress = S(<><path d="M3.5 8.5h5v-5" /><path d="M20.5 8.5h-5v-5" /><path d="M3.5 15.5h5v5" /><path d="M20.5 15.5h-5v5" /></>);
 export const IBack = S(<path d="m14.5 5-7 7 7 7" strokeWidth={2.4} />);
 export const IChevR = S(<path d="m9.5 5 7 7-7 7" />);

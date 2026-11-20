@@ -11,7 +11,7 @@ import { ArticlePanel, CommentsPanel, EpisodesPanel } from "./Panels";
 import { setBackHandler } from "../back";
 import {
   IBack, IBoltF, IChevR, IChevronDown, IChevronUp, IClose, ICommentF, ICompress, IExpand, IFileText, IHeart, IHeartF,
-  ILink, IList, ILockF, IPauseF, IPlayF, ISearch, IStar, IStarF, IVol, IVolMute,
+  ILink, IList, ILockF, IPauseF, IPlayF, IRotatePhone, ISearch, IStar, IStarF, IVol, IVolMute,
 } from "../icons";
 
 type Props = {
@@ -1070,9 +1070,10 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
                       </button>
                       <button
                         type="button"
+                        aria-label="全屏观看"
                         onClick={enterFs}
-                        className="hg-chip-strong backdrop-blur-md px-3 h-7 rounded-full text-[11.5px] font-semibold flex items-center gap-1 pressable elev-1">
-                        <IExpand size={12} />横屏全屏
+                        className="hg-chip-strong backdrop-blur-md px-2.5 h-8 rounded-full text-[12px] font-semibold flex items-center gap-1.5 pressable elev-1">
+                        <IRotatePhone size={16} strokeWidth={1.5} />全屏观看
                       </button>
                     </>
                   )}
