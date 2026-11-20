@@ -8,6 +8,7 @@ export const ADMIN_MENU = [
   { key: "diagnostics", label: "播放诊断" },
   { key: "users", label: "用户" },
   { key: "shares", label: "分享" },
+  { key: "comments", label: "评论" },
   { key: "system", label: "系统与审计" },
 ] as const;
 
@@ -53,6 +54,12 @@ const ICONS: Record<AdminPageKey, ReactNode> = {
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7">
       <path d="M10 13.5a4 4 0 0 0 5.66 0l2.83-2.83a4 4 0 0 0-5.66-5.66L11.4 6.4" />
       <path d="M14 10.5a4 4 0 0 0-5.66 0L5.5 13.34a4 4 0 0 0 5.66 5.66L12.6 17.6" />
+    </svg>
+  ),
+  comments: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7">
+      <path d="M4 5.5h16v10H9l-5 4v-4H4z" />
+      <path d="M8 10h8M8 13h5" />
     </svg>
   ),
   system: (

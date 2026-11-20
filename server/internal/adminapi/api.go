@@ -196,6 +196,19 @@ func (h *router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if allowMethod(w, r, http.MethodDelete) {
 			h.deleteShare(w, r, admin, seg[1])
 		}
+	case len(seg) == 1 && seg[0] == "comments":
+		if allowMethod(w, r, http.MethodGet) {
+			h.listComments(w, r, admin)
+		}
+	case len(seg) == 2 && seg[0] == "comments":
+		switch r.Method {
+		case http.MethodPost:
+			h.updateComment(w, r, admin, seg[1])
+		case http.MethodDelete:
+			h.deleteComment(w, r, admin, seg[1])
+		default:
+			allowMethod(w, r, http.MethodPost, http.MethodDelete)
+		}
 	case len(seg) == 1 && seg[0] == "works":
 		if allowMethod(w, r, http.MethodGet) {
 			h.listWorks(w, r, admin)

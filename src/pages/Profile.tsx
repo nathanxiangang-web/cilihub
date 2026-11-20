@@ -7,14 +7,16 @@ import { Avatar, Empty, Img } from "../components/ui";
 import { IChevR, IClock, ILogout, ISettings, IStar, IUser } from "../icons";
 
 /* 我的：结构固定（资料卡 + 我的收藏 / 观看历史）。
-   收藏与观看记录都存在本地，所以未登录也照常展示；未登录时资料卡本身就是登录入口。 */
+   未登录时收藏与观看记录都来自本地；登录后收藏以服务端为准，观看记录仍在本地。 */
 export default function Profile({ wide }: { wide: boolean }) {
-  const { user, setLoginOpen, logout, history, favs, clearHistory, push } = useStore();
+  const { user, setLoginOpen, logout, history, favs, serverFavs, serverFavsReady, clearHistory, push } = useStore();
   const [tab, setTab] = useState<"fav" | "history">("fav");
   const [cards, setCards] = useState<Detail[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const ids = tab === "fav" ? favs : history.map((h) => h.id);
+  const favIds = user ? serverFavs : favs;
+  const ids = tab === "fav" ? favIds : history.map((h) => h.id);
+  const waitingFavs = tab === "fav" && !!user && !serverFavsReady;
   /** 观看记录里这条的进度（收藏页没有） */
   const progressOf = (id: number) => (tab === "history" ? history.find((h) => h.id === id) : undefined);
 
@@ -90,7 +92,7 @@ export default function Profile({ wide }: { wide: boolean }) {
         </div>
 
         <div className="mt-3">
-          {loading ? (
+          {loading || waitingFavs ? (
             <div className="flex justify-center py-8"><div className="w-7 h-7 spinner" /></div>
           ) : cards.length ? (
             <div className="grid grid-cols-3 gap-2">

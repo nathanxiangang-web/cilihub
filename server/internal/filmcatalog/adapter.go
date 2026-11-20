@@ -247,7 +247,15 @@ func (a *Adapter) Edge(_ context.Context, method, resource string) ([]byte, erro
 	}
 	switch {
 	case method == http.MethodGet && action == "":
-		return json.Marshal(workJSON(detail))
+		counts, err := a.catalog.store.WorkCounts(id)
+		if err != nil {
+			return nil, errors.New("读取互动计数失败：" + err.Error())
+		}
+		data := workJSON(detail)
+		data["like_count"] = counts.Likes
+		data["comment_count"] = counts.Comments
+		data["collect_count"] = counts.Favorites
+		return json.Marshal(data)
 	case method == http.MethodGet && action == "comments":
 		return json.Marshal(emptyPage(u.Query()))
 	case method == http.MethodPost && strings.HasPrefix(action, "episodes/") && strings.HasSuffix(action, "/playback"):

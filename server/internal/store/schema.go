@@ -67,6 +67,21 @@ var schemaStatements = []string{
     created_by BIGINT NOT NULL DEFAULT 0, created_at TEXT NOT NULL);`,
 
 	`CREATE INDEX IF NOT EXISTS idx_shares_work ON shares(work_id);`,
+
+	`CREATE TABLE IF NOT EXISTS likes (
+    user_id BIGINT NOT NULL, work_id BIGINT NOT NULL, created_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, work_id));`,
+
+	`CREATE TABLE IF NOT EXISTS favorites (
+    user_id BIGINT NOT NULL, work_id BIGINT NOT NULL, created_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, work_id));`,
+
+	`CREATE TABLE IF NOT EXISTS comments (
+    id BIGSERIAL PRIMARY KEY, work_id BIGINT NOT NULL, episode_no INTEGER NOT NULL DEFAULT 1,
+    user_id BIGINT NOT NULL, content TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'visible',
+    created_at TEXT NOT NULL);`,
+
+	`CREATE INDEX IF NOT EXISTS idx_comments_work ON comments(work_id, status, created_at DESC);`,
 }
 
 const defaultCategorySQL = `INSERT INTO categories(slug,name,sort_index,visible) VALUES('openlist-films','影视',0,TRUE) ON CONFLICT (slug) DO NOTHING`

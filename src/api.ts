@@ -5,8 +5,8 @@ import type {
 
 /* ── 运行环境 ───────────────────────────────────────────── */
 
-/** 应用版本（构建时由 vite.config.ts 从 package.json 注入） */
-export const APP_VERSION = __APP_VERSION__;
+/** 应用版本（页面左下角展示的 web 版本标识） */
+export const APP_VERSION = "web0.2.0";
 export const isOpenListLibrary = isWeb && import.meta.env.VITE_OPENLIST_LIBRARY === "1";
 
 const ua = navigator.userAgent;

@@ -54,7 +54,7 @@ func main() {
 		logger.Fatalf("连接 PostgreSQL 失败: %v", err)
 	}
 	defer db.Close()
-	ensureAdmin(db, logger)
+	ensureAdmin(db, dataDir, logger)
 
 	line := newLineStore(filepath.Join(dataDir, "line.json"), envOr("CILIHUB_UPSTREAM", defaultUpstream), logger)
 
@@ -177,8 +177,9 @@ func importOpenListSettings(db *store.Store, credentialFile, now string) error {
 	}, now)
 }
 
-// ensureAdmin 仅在库中还没有管理员时创建首个账号；密码为空则随机生成并打印一次。
-func ensureAdmin(db *store.Store, logger *log.Logger) {
+// ensureAdmin 仅在库中还没有管理员时创建首个账号。明文密码写入
+// <dataDir>/admin-initial-password.txt（0600）供运维读取一次，日志只打印该路径。
+func ensureAdmin(db *store.Store, dataDir string, logger *log.Logger) {
 	count, err := db.AdminCount()
 	if err != nil {
 		logger.Fatalf("读取管理员数量失败: %v", err)
@@ -196,6 +197,11 @@ func ensureAdmin(db *store.Store, logger *log.Logger) {
 		}
 		generated = true
 	}
+	passwordFile := filepath.Join(dataDir, "admin-initial-password.txt")
+	// 先落盘再建号：文件写不成功时管理员尚未创建，下次启动可重新生成。
+	if err := writeInitialPassword(passwordFile, password); err != nil {
+		logger.Fatalf("写入初始管理员密码文件 %s 失败: %v", passwordFile, err)
+	}
 	hash, err := adminauth.HashPassword(password)
 	if err != nil {
 		logger.Fatalf("初始化管理员密码失败: %v", err)
@@ -204,10 +210,24 @@ func ensureAdmin(db *store.Store, logger *log.Logger) {
 		logger.Fatalf("创建初始管理员 %s 失败: %v", username, err)
 	}
 	if generated {
-		logger.Printf("已创建管理员 %s，初始密码：%s（请登录 /admin 后立即修改）", username, password)
+		logger.Printf("已创建管理员 %s，初始密码见 %s（登录 /admin 后请立即修改并删除该文件）", username, passwordFile)
 		return
 	}
-	logger.Printf("已创建管理员 %s（密码取自 CILIHUB_ADMIN_PASSWORD）", username)
+	logger.Printf("已创建管理员 %s（密码取自 CILIHUB_ADMIN_PASSWORD，明文见 %s）", username, passwordFile)
+}
+
+// writeInitialPassword 覆盖写入明文密码文件，目录 0700、文件 0600。
+func writeInitialPassword(path, password string) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	// 仅新建目录会带上 0700；既有数据目录不强行改权限，避免影响同目录其它文件。
+	_ = os.Chmod(dir, 0o700)
+	if err := os.WriteFile(path, []byte(password+"\n"), 0o600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o600)
 }
 
 func randomPassword(n int) (string, error) {

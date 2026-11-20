@@ -350,4 +350,34 @@ export function restoreShare(id: number): Promise<{ ok: boolean }> {
 
 export function deleteShare(id: number): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/shares/${id}`, { method: "DELETE" });
+}export type CommentRow = {
+  id: number;
+  work_id: number;
+  work_title: string;
+  user: string;
+  episode_no: number;
+  content: string;
+  status: string;
+  created_at: string;
+};
+
+export type CommentPage = { items: CommentRow[]; pagination: Pagination };
+
+export function comments(params: {
+  q?: string;
+  status?: string;
+  page?: number;
+  size?: number;
+}): Promise<CommentPage> {
+  return request<CommentPage>("/comments", {
+    query: { q: params.q, status: params.status, page: params.page, size: params.size },
+  });
+}
+
+export function updateComment(id: number, status: "visible" | "hidden"): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/comments/${id}`, { body: { status } });
+}
+
+export function deleteComment(id: number): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/comments/${id}`, { method: "DELETE" });
 }

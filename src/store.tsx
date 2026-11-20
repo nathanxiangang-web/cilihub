@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { setOrientation } from "./rpc";
+import { invoke, setOrientation } from "./rpc";
 import { api, platform as envPlatform } from "./api";
 import { isStrictSecurity, setStrictSecurity as setHtmlStrictSecurity } from "./html";
 import type { User } from "./types";
@@ -91,6 +91,19 @@ function loadPersist(): Persist {
   }
 }
 
+/** 拉取服务端「我的点赞 / 我的收藏」作品 id；未登录或离线时返回空。 */
+async function fetchMyIds(cmd: "api_my_likes" | "api_my_favs"): Promise<number[]> {
+  try {
+    const r = await invoke<{ items?: unknown }>(cmd, {});
+    const items = Array.isArray(r?.items) ? r.items : [];
+    return items.filter((x): x is number => typeof x === "number");
+  } catch {
+    return [];
+  }
+}
+
+const errText = (e: unknown) => (e instanceof Error && e.message ? e.message : "同步失败，请稍后重试");
+
 function readTheme(): Theme {
   try {
     return (localStorage.getItem(THEME) ?? localStorage.getItem("hghub_theme")) === "light" ? "light" : "dark";
@@ -113,6 +126,8 @@ type Store = {
   loginOpen: boolean; setLoginOpen: (b: boolean) => void;
   logout: () => Promise<void>;
   likes: number[]; favs: number[]; history: WatchProgress[]; follows: number[];
+  /** 登录状态下服务端的收藏作品 id（收藏页以它为准） */
+  serverFavs: number[]; serverFavsReady: boolean;
   isLiked: (id: number) => boolean; isFav: (id: number) => boolean;
   toggleLikeLocal: (id: number) => boolean;
   toggleFavLocal: (id: number) => boolean;
@@ -151,6 +166,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [cliRelaxed, setCliRelaxed] = useState(false);
   const [strictSecurityReady, setStrictSecurityReady] = useState(false);
   const [securityPending, setSecurityPending] = useState(false);
+  const [serverFavs, setServerFavs] = useState<number[]>([]);
+  const [serverFavsReady, setServerFavsReady] = useState(false);
   const toastSeq = useRef(0);
 
   useEffect(() => {
@@ -175,6 +192,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       })
       .catch(() => { /* 离线也能用 */ });
   }, []);
+
+  // 登录（或启动恢复会话）后把服务端的点赞/收藏 id 合并进本地，收藏页另用 serverFavs 为准
+  useEffect(() => {
+    if (!user) {
+      setServerFavs([]);
+      setServerFavsReady(false);
+      return;
+    }
+    let alive = true;
+    Promise.all([fetchMyIds("api_my_likes"), fetchMyIds("api_my_favs")]).then(([likes, favs]) => {
+      if (!alive) return;
+      setP((s) => ({
+        ...s,
+        likes: [...likes.filter((id) => !s.likes.includes(id)), ...s.likes],
+        favs: [...favs.filter((id) => !s.favs.includes(id)), ...s.favs],
+      }));
+      setServerFavs(favs);
+      setServerFavsReady(true);
+    });
+    return () => { alive = false; };
+  }, [user]);
 
   const setStrictSecurity = useCallback(async (on: boolean) => {
     if (!strictSecurityReady) throw new Error("安全设置尚未读取，请重新启动应用");
@@ -210,16 +248,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       on = !s.likes.includes(id);
       return { ...s, likes: on ? [id, ...s.likes] : s.likes.filter((x) => x !== id) };
     });
+    if (user) {
+      // 服务端按作品维度记录点赞，ep 只是既有接口参数
+      api.like(id, 1, on).catch((e: unknown) => {
+        setP((s) => ({ ...s, likes: on ? s.likes.filter((x) => x !== id) : [id, ...s.likes.filter((x) => x !== id)] }));
+        toast(errText(e), "info");
+      });
+    }
     return on;
-  }, []);
+  }, [user, toast]);
   const toggleFavLocal = useCallback((id: number) => {
     let on = false;
     setP((s) => {
       on = !s.favs.includes(id);
       return { ...s, favs: on ? [id, ...s.favs] : s.favs.filter((x) => x !== id) };
     });
+    if (user) {
+      setServerFavs((s) => (on ? [id, ...s.filter((x) => x !== id)] : s.filter((x) => x !== id)));
+      api.collect(id, on).catch((e: unknown) => {
+        setP((s) => ({ ...s, favs: on ? s.favs.filter((x) => x !== id) : [id, ...s.favs.filter((x) => x !== id)] }));
+        setServerFavs((s) => (on ? s.filter((x) => x !== id) : [id, ...s.filter((x) => x !== id)]));
+        toast(errText(e), "info");
+      });
+    }
     return on;
-  }, []);
+  }, [user, toast]);
   const toggleFollowLocal = useCallback((uid: number) => {
     let on = false;
     setP((s) => {
@@ -293,6 +346,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     tab, setTab, stack, push, pop,
     user, setUser, loginOpen, setLoginOpen, logout,
     likes: p.likes, favs: p.favs, history: p.history, follows: p.follows,
+    serverFavs, serverFavsReady,
     isLiked: (id) => p.likes.includes(id),
     isFav: (id) => p.favs.includes(id),
     toggleLikeLocal, toggleFavLocal, toggleFollowLocal, addHistory, clearHistory,
@@ -303,7 +357,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     strictSecurity, strictSecurityReady, securityPending, cliRelaxed, setStrictSecurity,
     toasts, toast,
   }), [theme, tab, setTab, stack, push, pop, user, loginOpen, logout,
-    p, toggleLikeLocal, toggleFavLocal, toggleFollowLocal, addHistory, clearHistory,
+    p, serverFavs, serverFavsReady, toggleLikeLocal, toggleFavLocal, toggleFollowLocal, addHistory, clearHistory,
     setMuted, setMuteOnStartup, setVolume, addSearch, clearSearchHist, strictSecurity, strictSecurityReady, securityPending, cliRelaxed, setStrictSecurity,
     toasts, toast, theater, setTheater, fs, setFs, clean, setClean]);
 

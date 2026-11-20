@@ -15,6 +15,7 @@ import SyncPage from "./pages/SyncPage";
 import DiagnosticsPage from "./pages/DiagnosticsPage";
 import UsersPage from "./pages/UsersPage";
 import SharesPage from "./pages/SharesPage";
+import CommentsPage from "./pages/CommentsPage";
 import SystemPage from "./pages/SystemPage";
 
 const TITLES: Record<AdminPageKey, string> = {
@@ -25,6 +26,7 @@ const TITLES: Record<AdminPageKey, string> = {
   diagnostics: "播放诊断",
   users: "用户",
   shares: "分享",
+  comments: "评论",
   system: "系统与审计",
 };
 
@@ -91,6 +93,7 @@ export default function AdminApp() {
           {page === "diagnostics" ? <DiagnosticsPage /> : null}
           {page === "users" ? <UsersPage /> : null}
           {page === "shares" ? <SharesPage /> : null}
+          {page === "comments" ? <CommentsPage /> : null}
           {page === "system" ? <SystemPage /> : null}
         </div>
       </div>

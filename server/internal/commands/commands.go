@@ -56,7 +56,8 @@ type call struct {
 
 func routes() map[string]command {
 	out := make(map[string]command, 40)
-	for _, group := range []map[string]command{authRoutes(), contentRoutes(), miscRoutes(), shareRoutes()} {
+	// interactRoutes 放在 contentRoutes 之后，用本地落库覆盖同名的边缘转发。
+	for _, group := range []map[string]command{authRoutes(), contentRoutes(), miscRoutes(), shareRoutes(), interactRoutes()} {
 		for name, fn := range group {
 			out[name] = fn
 		}

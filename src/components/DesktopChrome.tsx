@@ -113,7 +113,7 @@ export function DesktopRail({ collapsed }: { collapsed: boolean }) {
               <small>{user ? "你的精彩，都在这里" : "留住每一次心动"}</small>
             </span>
           </button>
-          <span className="win-sidebar-version">{APP_NAME} Web {APP_VERSION}</span>
+          <span className="win-sidebar-version">{APP_NAME} · {APP_VERSION}</span>
         </div>
       </div>
     </nav>
