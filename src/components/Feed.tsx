@@ -161,6 +161,10 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
     }
   };
 
+  /* 点赞/收藏/评论的即时计数：详情只拉一次，操作后用增量保持数字同步 */
+  const [countAdj, setCountAdj] = useState({ like: 0, comment: 0, collect: 0 });
+  useEffect(() => { setCountAdj({ like: 0, comment: 0, collect: 0 }); }, [curId]);
+
   /** 统一视图模型：短剧与吃瓜帖子共用同一套播放界面 */
   const meta = kind === "post"
     ? {
@@ -184,9 +188,9 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
         authorId: detail?.author?.id || -1,
         tags: detail?.tags || [],
         score: detail?.score || 0,
-        like: detail?.counts?.like ?? cards[curId]?.like_count ?? 0,
-        comment: detail?.counts?.comment ?? cards[curId]?.comment_count ?? 0,
-        collect: detail?.counts?.collect ?? cards[curId]?.collect_count ?? 0,
+        like: (detail?.counts?.like ?? cards[curId]?.like_count ?? 0) + countAdj.like,
+        comment: (detail?.counts?.comment ?? cards[curId]?.comment_count ?? 0) + countAdj.comment,
+        collect: (detail?.counts?.collect ?? cards[curId]?.collect_count ?? 0) + countAdj.collect,
         episodes: detail?.episodes || [],
       };
 
@@ -779,6 +783,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
   const onLike = () => {
     if (!curId) return;
     const on = toggleLikeLocal(curId);
+    setCountAdj((v) => ({ ...v, like: v.like + (on ? 1 : -1) }));
     setHeartBurst((n) => n + 1);
     toast(on ? "已加入喜欢" : "已取消喜欢", on ? "heart" : "info");
     if (requireLogin()) { if (kind === "post") api.postLike(curId, on).catch(() => {}); else api.like(curId, curEp, on).catch(() => {}); }
@@ -787,6 +792,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
   const onFav = () => {
     if (!curId) return;
     const on = toggleFavLocal(curId);
+    setCountAdj((v) => ({ ...v, collect: v.collect + (on ? 1 : -1) }));
     toast(on ? "已收藏" : "已取消收藏", on ? "star" : "info");
     if (requireLogin()) { if (kind === "post") api.postCollect(curId, on).catch(() => {}); else api.collect(curId, on).catch(() => {}); }
   };
@@ -1266,7 +1272,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
             {panel === "episodes" ? (
               <EpisodesPanel videoId={curId} episodes={episodes} current={curEp} onPick={pickEp} onClose={() => setPanel(null)} />
             ) : panel === "comments" ? (
-              <CommentsPanel videoId={curId} ep={curEp} total={meta.comment} kind={kind} onClose={() => setPanel(null)} />
+              <CommentsPanel videoId={curId} ep={curEp} total={meta.comment} kind={kind} onSent={() => setCountAdj((v) => ({ ...v, comment: v.comment + 1 }))} onClose={() => setPanel(null)} />
             ) : null}
           </div>
         </div>

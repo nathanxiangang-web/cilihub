@@ -48,7 +48,12 @@ func (s *Store) FeedWithSeed(categorySlug, q, seed string, page, size int) (Feed
 
 func (s *Store) feed(categorySlug, q, seed string, page, size int) (FeedPage, error) {
 	page, size = pageArgs(page, size)
-	where := []string{"w.visible = TRUE"}
+	// 只展示至少有一个可播文件的作品：切换映射目录后，旧目录文件会被标记
+	// present=false，对应作品随即从前台消失；切回目录后自动恢复。
+	where := []string{
+		"w.visible = TRUE",
+		"EXISTS (SELECT 1 FROM work_files f WHERE f.work_id = w.id AND f.present = TRUE)",
+	}
 	var args []any
 	if slug := strings.TrimSpace(categorySlug); slug != "" {
 		where = append(where, "c.slug = "+bind(&args, slug))

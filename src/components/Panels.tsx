@@ -47,12 +47,20 @@ export function EpisodesPanel({ videoId, episodes, current, onPick, onClose, bar
   );
 }
 
+function fmtTime(raw: string): string {
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return raw;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 /* ================= 评论 ================= */
-export function CommentsPanel({ videoId, ep, total, kind = "video", onClose }: {
-  videoId: number; ep: number; total: number; kind?: "video" | "post"; onClose: () => void;
+export function CommentsPanel({ videoId, ep, total, kind = "video", onSent, onClose }: {
+  videoId: number; ep: number; total: number; kind?: "video" | "post"; onSent?: () => void; onClose: () => void;
 }) {
   const { user, setLoginOpen, toast } = useStore();
   const [items, setItems] = useState<Comment[]>([]);
+  const [totalCount, setTotalCount] = useState(total);
   const [page, setPage] = useState(0);
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -73,6 +81,7 @@ export function CommentsPanel({ videoId, ep, total, kind = "video", onClose }: {
       });
       setPage(p);
       setPages(res?.pagination?.pages || 1);
+      setTotalCount((prev) => res?.pagination?.total ?? prev);
     } catch {
       if (p === 1) setItems([]);
     } finally {
@@ -90,6 +99,7 @@ export function CommentsPanel({ videoId, ep, total, kind = "video", onClose }: {
     try {
       await api.commentSend(videoId, ep, t);
       setText("");
+      onSent?.();
       toast("评论已提交，审核通过后展示", "ok");
       load(1);
     } catch (e) {
@@ -103,7 +113,7 @@ export function CommentsPanel({ videoId, ep, total, kind = "video", onClose }: {
     <div className="flex flex-col h-full">
       <div className="shrink-0 flex items-center gap-2 px-4 h-12">
         <span className="text-[13.5px] font-bold text-on">评论</span>
-        <span className="text-[10.5px] text-mut">{fmt(total)} · 第 {ep} 集</span>
+        <span className="text-[10.5px] text-mut">{fmt(totalCount)} · 第 {ep} 集</span>
         <button onClick={onClose} aria-label="关闭" className="ml-auto w-7 h-7 rounded-full bg-s3 flex items-center justify-center text-mut pressable">
           <IClose size={13} />
         </button>
@@ -116,7 +126,7 @@ export function CommentsPanel({ videoId, ep, total, kind = "video", onClose }: {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="text-[11.5px] font-semibold text-on/90">{c.nickname}</span>
-                <span className="text-[10px] text-dim">{c.time}</span>
+                <span className="text-[10px] text-dim">{fmtTime(c.time)}</span>
               </div>
               <p className="text-[12.5px] text-on/80 mt-1 leading-relaxed whitespace-pre-wrap">{c.text}</p>
               <div className="flex items-center gap-3 mt-1.5 text-[10.5px] text-dim">

@@ -245,6 +245,10 @@ func (a *Adapter) Edge(_ context.Context, method, resource string) ([]byte, erro
 	if err != nil {
 		return nil, err
 	}
+	// 切换目录后会留下 present=false 的旧作品：前台不应再进入其详情/播放页。
+	if detail.Work.EpisodeCount == 0 {
+		return nil, errors.New("视频不存在")
+	}
 	switch {
 	case method == http.MethodGet && action == "":
 		counts, err := a.catalog.store.WorkCounts(id)
