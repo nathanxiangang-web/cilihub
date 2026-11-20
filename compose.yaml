@@ -1,0 +1,34 @@
+name: cilihub
+services:
+  web:
+    image: cilihub:local
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      OPENLIST_ORIGIN: "${OPENLIST_ORIGIN:?set the OpenList HTTPS origin}"
+      OPENLIST_FOLDER: "${OPENLIST_FOLDER:-/影视}"
+      OPENLIST_CDN_HOST: "${OPENLIST_CDN_HOST:-cdnfhnfile.115cdn.net}"
+      OPENLIST_CREDENTIALS_FILE: /run/secrets/openlist.json
+    volumes:
+      - data:/data
+      - type: bind
+        source: "${OPENLIST_CREDENTIALS_PATH:-./private/openlist.json}"
+        target: /run/secrets/openlist.json
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:${CILIHUB_PORT:-18792}:8080"
+    healthcheck:
+      test: [CMD, wget, -q, -T, '5', -O, /dev/null, 'http://127.0.0.1:8080/']
+      interval: 15s
+      timeout: 6s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      options:
+        max-size: 10m
+        max-file: '3'
+volumes:
+  data:

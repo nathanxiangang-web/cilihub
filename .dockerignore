@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+private/
+data/
+server/data/
+node_modules/
+dist/
+server/web/dist/
+test-results/
+*.log

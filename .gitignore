@@ -1,0 +1,40 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 构建产物
+/dist/
+dist-ssr/
+test-results/
+/package-lock.json
+*.local
+
+# Go 嵌入目录的内容由 Web 构建生成
+/server/web/dist/*
+!/server/web/dist/.gitkeep
+
+# 编辑器 / 系统
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# 签名与密钥（务必不要提交）
+*.keystore
+*.jks
+*.p12
+*.pem
+.env
+.env.*
+!/.env.example
+/private/
+/data/
+/server/data/
+
+# API
+docs/API.md
+
+# Agent instructions (local)
+AGENTS.md
