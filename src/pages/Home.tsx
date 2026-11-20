@@ -6,8 +6,11 @@ import { useStore } from "../store";
 import { ISearch } from "../icons";
 import { Empty } from "../components/ui";
 
+const newSeed = () => Math.random().toString(36).slice(2, 10);
+
 export default function Home({ active, bottomInset }: { active: boolean; bottomInset: number }) {
   const { toast } = useStore();
+  const seedRef = useRef("");
   const [items, setItems] = useState<VideoCard[]>([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -17,11 +20,12 @@ export default function Home({ active, bottomInset }: { active: boolean; bottomI
 
   const load = useCallback(async (p: number) => {
     if (loadingRef.current || done) return;
+    if (p <= 1) seedRef.current = newSeed();
     loadingRef.current = true;
     setLoading(true);
     setError("");
     try {
-      const res = await api.feed(p, 10);
+      const res = await api.feed(p, 10, seedRef.current);
       const list = res?.items || [];
       setItems((prev) => {
         const seen = new Set(prev.map((x) => x.id));

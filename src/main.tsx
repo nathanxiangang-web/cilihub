@@ -20,10 +20,19 @@ window.addEventListener("unhandledrejection", (e) => {
   report("reject", String((e.reason && (e.reason.stack || e.reason.message)) || e.reason));
 });
 
+const AdminApp = React.lazy(() => import("./admin/AdminApp"));
+const isAdminRoute = location.pathname === "/admin" || location.pathname.startsWith("/admin/");
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <AppProvider>
-      <App />
-    </AppProvider>
+    {isAdminRoute ? (
+      <React.Suspense fallback={<div className="cs-admin-boot">加载管理后台…</div>}>
+        <AdminApp />
+      </React.Suspense>
+    ) : (
+      <AppProvider>
+        <App />
+      </AppProvider>
+    )}
   </React.StrictMode>,
 );

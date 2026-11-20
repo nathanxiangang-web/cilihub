@@ -30,18 +30,56 @@ type openList struct {
 type entry struct {
 	Name string `json:"name"`
 	Dir  bool   `json:"is_dir"`
+	Size int64  `json:"size"`
 }
+
 
 type link struct {
 	URL string `json:"raw_url"`
 	Dir *bool  `json:"is_dir"`
 }
 
-func newOpenList(origin, credentialFile string) (*openList, error) {
+func parseOrigin(origin string) (string, error) {
 	u, err := url.Parse(origin)
 	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil ||
 		(u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
-		return nil, errors.New("OPENLIST_ORIGIN 必须是 HTTPS 站点地址")
+		return "", errors.New("OPENLIST_ORIGIN 必须是 HTTPS 站点地址")
+	}
+	return u.Scheme + "://" + u.Host, nil
+}
+
+func newOpenListClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	return &http.Client{
+		Transport: transport,
+		Timeout:   20 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
+// newOpenListWithCreds 用内存凭据构造客户端，不做网络请求；登录推迟到首次 list/link。
+func newOpenListWithCreds(origin, username, password string) (*openList, error) {
+	canonical, err := parseOrigin(origin)
+	if err != nil {
+		return nil, err
+	}
+	if username == "" || password == "" {
+		return nil, errors.New("OpenList 账号和密码不能为空")
+	}
+	return &openList{
+		origin: canonical,
+		creds:  credentials{Username: username, Password: password},
+		client: newOpenListClient(),
+	}, nil
+}
+
+func newOpenList(origin, credentialFile string) (*openList, error) {
+	canonical, err := parseOrigin(origin)
+	if err != nil {
+		return nil, err
 	}
 	secret, err := os.ReadFile(credentialFile)
 	if err != nil {
@@ -51,19 +89,7 @@ func newOpenList(origin, credentialFile string) (*openList, error) {
 	if json.Unmarshal(secret, &creds) != nil || creds.Username == "" || creds.Password == "" {
 		return nil, errors.New("OpenList 凭据文件需要 username 和 password")
 	}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.Proxy = nil
-	return &openList{
-		origin: u.Scheme + "://" + u.Host,
-		creds:  creds,
-		client: &http.Client{
-			Transport: transport,
-			Timeout:   20 * time.Second,
-			CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-		},
-	}, nil
+	return &openList{origin: canonical, creds: creds, client: newOpenListClient()}, nil
 }
 
 type openListStatus int
@@ -168,4 +194,49 @@ func (o *openList) link(ctx context.Context, path, userAgent string) (link, erro
 	var item link
 	err := o.read(ctx, "/api/fs/get", map[string]string{"path": path}, &item, userAgent)
 	return item, err
+}
+type TestResult struct {
+	OK        bool   `json:"ok"`
+	Status    int    `json:"status"`
+	ElapsedMS int64  `json:"elapsed_ms"`
+	Entries   int    `json:"entries"`
+	Message   string `json:"message"`
+}
+
+// TestConnection 登录并列出目标目录，不读写数据库；配置非法时返回错误，连接失败时由结果描述。
+func TestConnection(ctx context.Context, cfg ListConfig) (TestResult, error) {
+	if err := validateFolder(cfg.Folder); err != nil {
+		return TestResult{}, err
+	}
+	client, err := newOpenListWithCreds(cfg.Origin, cfg.Username, cfg.Password)
+	if err != nil {
+		return TestResult{}, err
+	}
+	started := time.Now()
+	entries, err := client.list(ctx, cfg.Folder)
+	result := TestResult{ElapsedMS: time.Since(started).Milliseconds()}
+	if err != nil {
+		result.Status, result.Message = testFailure(err)
+		return result, nil
+	}
+	result.OK = true
+	result.Status = http.StatusOK
+	result.Entries = len(entries)
+	result.Message = "连接成功"
+	return result, nil
+}
+
+func testFailure(err error) (int, string) {
+	var status openListStatus
+	if !errors.As(err, &status) {
+		return http.StatusBadGateway, err.Error()
+	}
+	switch int(status) {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return int(status), "OpenList 账号或密码不正确"
+	case http.StatusNotFound:
+		return int(status), "映射目录不存在或不是目录"
+	default:
+		return int(status), status.Error()
+	}
 }

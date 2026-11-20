@@ -1,5 +1,25 @@
 name: cilihub
 services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cilihub
+      POSTGRES_PASSWORD: cilihub
+      POSTGRES_DB: cilihub
+    volumes:
+      - cilihub-db:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U cilihub -d cilihub]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      options:
+        max-size: 10m
+        max-file: '3'
   web:
     image: cilihub:local
     pull_policy: never
@@ -9,6 +29,12 @@ services:
       OPENLIST_FOLDER: "${OPENLIST_FOLDER:-/影视}"
       OPENLIST_CDN_HOST: "${OPENLIST_CDN_HOST:-cdnfhnfile.115cdn.net}"
       OPENLIST_CREDENTIALS_FILE: /run/secrets/openlist.json
+      CILIHUB_DATABASE_URL: "${CILIHUB_DATABASE_URL:-postgres://cilihub:cilihub@db:5432/cilihub?sslmode=disable}"
+      CILIHUB_ADMIN_USER: "${CILIHUB_ADMIN_USER:-admin}"
+      CILIHUB_ADMIN_PASSWORD: "${CILIHUB_ADMIN_PASSWORD:-}"
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       - data:/data
       - type: bind
@@ -32,3 +58,4 @@ services:
         max-file: '3'
 volumes:
   data:
+  cilihub-db:

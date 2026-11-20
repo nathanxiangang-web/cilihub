@@ -10,7 +10,8 @@ COPY scripts ./scripts
 COPY tests ./tests
 RUN pnpm run build
 
-FROM public.ecr.aws/docker/library/golang:1.23-alpine AS build
+FROM public.ecr.aws/docker/library/golang:1.25-alpine AS build
+ENV GOPROXY=https://goproxy.cn,direct
 WORKDIR /src
 COPY server/ ./
 COPY --from=web /app/dist ./web/dist

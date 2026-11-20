@@ -2,15 +2,21 @@ package filmcatalog
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
 	"errors"
 	"path"
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
+
+	"github.com/nathanxiangang-web/cilihub/server/internal/store"
+)
+
+const (
+	scanInterval    = 5 * time.Minute
+	retryInterval   = 30 * time.Second
+	scanTimeout     = 6 * time.Minute
+	scanParallelism = 4
 )
 
 type source interface {
@@ -18,35 +24,24 @@ type source interface {
 	link(context.Context, string, string) (link, error)
 }
 
-type film struct {
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
-	path  string
-}
-
-type snapshot struct {
-	films []film
-	byID  map[int64]film
-}
-
 type catalog struct {
-	source  source
-	root    string
-	current atomic.Pointer[snapshot]
+	source source
+	root   string
+	store  *store.Store
+	mu     sync.Mutex
 }
 
 func (c *catalog) run(ctx context.Context, logf func(string, ...any)) {
 	for ctx.Err() == nil {
-		scanCtx, cancel := context.WithTimeout(ctx, 6*time.Minute)
-		found, err := c.scan(scanCtx)
-		cancel()
-		delay := 5 * time.Minute
-		if err != nil {
+		delay := scanInterval
+		if !c.ready() {
+			// 尚未配置源时不写 sync_runs，等待后台 Apply
+			delay = retryInterval
+		} else if runID, err := c.sync(ctx); err != nil {
 			logf("OpenList 目录刷新失败: %v", err)
-			delay = 30 * time.Second
+			delay = retryInterval
 		} else {
-			c.current.Store(found)
-			logf("OpenList 视频目录已刷新: %d 个视频", len(found.films))
+			logf("OpenList 视频目录已合并入库（同步 #%d）", runID)
 		}
 		timer := time.NewTimer(delay)
 		select {
@@ -58,16 +53,61 @@ func (c *catalog) run(ctx context.Context, logf func(string, ...any)) {
 	}
 }
 
-func (c *catalog) scan(ctx context.Context) (*snapshot, error) {
-	const parallelism = 4
-	result := &snapshot{films: []film{}, byID: make(map[int64]film)}
+func (c *catalog) ready() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.source != nil
+}
+
+func (c *catalog) syncNow() (int64, error) {
+	return c.sync(context.Background())
+}
+
+func (c *catalog) sync(ctx context.Context) (int64, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.source == nil {
+		return 0, errors.New("尚未配置 OpenList 连接")
+	}
+	scanCtx, cancel := context.WithTimeout(ctx, scanTimeout)
+	defer cancel()
+
+	runID, err := c.store.StartSyncRun(nowText())
+	if err != nil {
+		return 0, err
+	}
+	files, err := c.scan(scanCtx)
+	if err != nil {
+		c.fail(runID, err)
+		return runID, err
+	}
+	merged, err := c.store.ApplyScan(runID, files, nowText())
+	if err != nil {
+		c.fail(runID, err)
+		return runID, err
+	}
+	if err := c.store.FinishSyncRun(runID, "ok", merged.Added, merged.Missing, 0, ""); err != nil {
+		return runID, err
+	}
+	return runID, nil
+}
+
+// fail 只终结本次同步记录；扫描失败时数据库停留在上次成功状态。
+func (c *catalog) fail(runID int64, cause error) {
+	_ = c.store.FinishSyncRun(runID, "failed", 0, 0, 1, cause.Error())
+}
+
+func nowText() string { return time.Now().UTC().Format(time.RFC3339) }
+
+func (c *catalog) scan(ctx context.Context) ([]store.ScannedFile, error) {
+	result := make([]store.ScannedFile, 0)
 	queue := []string{c.root}
 	seen := map[string]bool{c.root: true}
 	for len(queue) > 0 {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		count := min(len(queue), parallelism)
+		count := min(len(queue), scanParallelism)
 		folders := queue[:count:count]
 		queue = queue[count:]
 		read := make([]struct {
@@ -103,22 +143,12 @@ func (c *catalog) scan(ctx context.Context) (*snapshot, error) {
 				if !isVideo(item.Name) {
 					continue
 				}
-				digest := sha256.Sum256([]byte(fullPath))
-				id := int64(binary.BigEndian.Uint64(digest[:])&((1<<52)-1)) + 1
-				if _, collision := result.byID[id]; collision {
-					return nil, errors.New("视频标识重复")
-				}
-				video := film{ID: id, Title: item.Name, path: fullPath}
-				result.films = append(result.films, video)
-				result.byID[id] = video
+				result = append(result, store.ScannedFile{Path: fullPath, Name: item.Name, Size: item.Size})
 			}
 		}
 	}
-	slices.SortFunc(result.films, func(a, b film) int {
-		if title := strings.Compare(strings.ToLower(a.Title), strings.ToLower(b.Title)); title != 0 {
-			return title
-		}
-		return strings.Compare(a.path, b.path)
+	slices.SortFunc(result, func(a, b store.ScannedFile) int {
+		return strings.Compare(a.Path, b.Path)
 	})
 	return result, nil
 }

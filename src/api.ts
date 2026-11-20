@@ -78,7 +78,8 @@ export const api = {
   logout: () => call<{ ok: boolean }>("api_logout"),
   me: () => call<User>("api_me"),
 
-  feed: (page = 1, size = 20) => call<Paged<VideoCard>>("api_feed", { page, size }),
+  feed: (page = 1, size = 20, seed = "") =>
+    call<Paged<VideoCard>>("api_feed", seed ? { page, size, seed } : { page, size }),
   category: (cate: string, page = 1, size = 20) =>
     call<Paged<VideoCard>>("api_category", { cate, page, size }),
   rank: (kind: "hot" | "recommend" | "potential") =>

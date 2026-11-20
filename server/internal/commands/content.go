@@ -32,7 +32,11 @@ func contentRoutes() map[string]command {
 func apiFeed(c *call) (any, error) {
 	page := c.p.i64(1, "page")
 	size := c.p.i64(20, "size")
-	return c.h.edge(c.r.Context(), "GET", fmt.Sprintf("/api/videos?page=%d&size=%d", page, size), nil, c.h.token(c.r))
+	resource := fmt.Sprintf("/api/videos?page=%d&size=%d", page, size)
+	if seed := c.p.str("seed"); seed != "" {
+		resource += "&seed=" + url.QueryEscape(seed)
+	}
+	return c.h.edge(c.r.Context(), "GET", resource, nil, c.h.token(c.r))
 }
 
 func apiCategory(c *call) (any, error) {
