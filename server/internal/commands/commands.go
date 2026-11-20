@@ -14,22 +14,27 @@ import (
 	"github.com/nathanxiangang-web/cilihub/server/internal/media"
 	"github.com/nathanxiangang-web/cilihub/server/internal/netx"
 	"github.com/nathanxiangang-web/cilihub/server/internal/session"
+	"github.com/nathanxiangang-web/cilihub/server/internal/shares"
+	"github.com/nathanxiangang-web/cilihub/server/internal/store"
 )
 
 const maxBodyBytes = 1 << 20
 
 // Deps 是命令层使用的进程级资源。CatalogEdge 是可选的替代内容源。
+// Shares 为空时分享命令返回「分享服务未启用」。
 type Deps struct {
 	Base        func() string
 	SetBase     func(string) (string, error)
 	Media       *media.Service
 	Log         *log.Logger
+	Store       *store.Store
+	Shares      *shares.Service
 	CatalogEdge func(context.Context, string, string) ([]byte, error)
 }
 
 // Register 把 /rpc/{command} 挂到 mux 并注册全部命令。
 func Register(mux *http.ServeMux, d Deps) {
-	if d.Base == nil || d.SetBase == nil || d.Media == nil || d.Log == nil {
+	if d.Base == nil || d.SetBase == nil || d.Media == nil || d.Log == nil || d.Store == nil {
 		panic("commands: Deps 字段不可为空")
 	}
 	mux.Handle("/rpc/", &router{deps: d, routes: routes()})
@@ -50,8 +55,8 @@ type call struct {
 }
 
 func routes() map[string]command {
-	out := make(map[string]command, 36)
-	for _, group := range []map[string]command{authRoutes(), contentRoutes(), miscRoutes()} {
+	out := make(map[string]command, 40)
+	for _, group := range []map[string]command{authRoutes(), contentRoutes(), miscRoutes(), shareRoutes()} {
 		for name, fn := range group {
 			out[name] = fn
 		}

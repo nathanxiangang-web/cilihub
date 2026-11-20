@@ -43,10 +43,30 @@ var schemaStatements = []string{
     id BIGSERIAL PRIMARY KEY, admin_id BIGINT NOT NULL, action TEXT NOT NULL,
     target_type TEXT NOT NULL, target_id TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '', at TEXT NOT NULL);`,
 
+	`CREATE TABLE IF NOT EXISTS users (
+    id BIGSERIAL PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active', note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL, last_login_at TEXT NOT NULL DEFAULT '');`,
+
+	`CREATE TABLE IF NOT EXISTS user_sessions (
+    token_hash TEXT PRIMARY KEY, user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL, created_at TEXT NOT NULL);`,
+
+	`CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id);`,
+
 	`CREATE TABLE IF NOT EXISTS openlist_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     origin TEXT NOT NULL, folder TEXT NOT NULL, cdn_host TEXT NOT NULL,
     username TEXT NOT NULL, password_enc TEXT NOT NULL, updated_at TEXT NOT NULL);`,
+
+	`CREATE TABLE IF NOT EXISTS shares (
+    id BIGSERIAL PRIMARY KEY, code TEXT NOT NULL UNIQUE,
+    work_id BIGINT NOT NULL REFERENCES works(id) ON DELETE CASCADE,
+    password_hash TEXT NOT NULL DEFAULT '', expires_at TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active', views BIGINT NOT NULL DEFAULT 0,
+    created_by BIGINT NOT NULL DEFAULT 0, created_at TEXT NOT NULL);`,
+
+	`CREATE INDEX IF NOT EXISTS idx_shares_work ON shares(work_id);`,
 }
 
 const defaultCategorySQL = `INSERT INTO categories(slug,name,sort_index,visible) VALUES('openlist-films','影视',0,TRUE) ON CONFLICT (slug) DO NOTHING`

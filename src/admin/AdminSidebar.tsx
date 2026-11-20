@@ -6,6 +6,8 @@ export const ADMIN_MENU = [
   { key: "categories", label: "分类与首页" },
   { key: "sync", label: "OpenList 同步" },
   { key: "diagnostics", label: "播放诊断" },
+  { key: "users", label: "用户" },
+  { key: "shares", label: "分享" },
   { key: "system", label: "系统与审计" },
 ] as const;
 
@@ -39,6 +41,18 @@ const ICONS: Record<AdminPageKey, ReactNode> = {
   diagnostics: (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7">
       <path d="M3 12h4l2.5-7 4 14L16 12h5" />
+    </svg>
+  ),
+  users: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7">
+      <circle cx="9" cy="8" r="3.4" />
+      <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5.2a3.4 3.4 0 0 1 0 6.6M18 20c0-2.6-1.2-4.6-3-5.6" />
+    </svg>
+  ),
+  shares: (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7">
+      <path d="M10 13.5a4 4 0 0 0 5.66 0l2.83-2.83a4 4 0 0 0-5.66-5.66L11.4 6.4" />
+      <path d="M14 10.5a4 4 0 0 0-5.66 0L5.5 13.34a4 4 0 0 0 5.66 5.66L12.6 17.6" />
     </svg>
   ),
   system: (

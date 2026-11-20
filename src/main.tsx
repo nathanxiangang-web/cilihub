@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import SharePage from "./pages/SharePage";
 import { AppProvider } from "./store";
 import { invoke } from "./rpc";
 import "./index.css";
@@ -22,6 +23,8 @@ window.addEventListener("unhandledrejection", (e) => {
 
 const AdminApp = React.lazy(() => import("./admin/AdminApp"));
 const isAdminRoute = location.pathname === "/admin" || location.pathname.startsWith("/admin/");
+/* 分享落地页独立挂载：不进入主应用，直接播放分享内容 */
+const isShareRoute = location.pathname.startsWith("/s/");
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -29,6 +32,8 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <React.Suspense fallback={<div className="cs-admin-boot">加载管理后台…</div>}>
         <AdminApp />
       </React.Suspense>
+    ) : isShareRoute ? (
+      <SharePage />
     ) : (
       <AppProvider>
         <App />

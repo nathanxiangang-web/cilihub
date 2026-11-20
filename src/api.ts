@@ -99,6 +99,18 @@ export const api = {
   commentSend: (id: number, ep: number, text: string, replyId?: number) =>
     call<unknown>("api_comment_send", { id, ep, text, replyId: replyId ?? null }),
 
+  /* 分享：创建 / 读取 / 校验提取码 */
+  shareCreate: (workId: number, episodeNo?: number, password?: string, expiresDays?: number) =>
+    call<ShareCreated>("api_share_create", {
+      work_id: workId,
+      episode_no: episodeNo ?? 1,
+      ...(password ? { password } : {}),
+      ...(expiresDays !== undefined ? { expires_days: expiresDays } : {}),
+    }),
+  shareInfo: (code: string) => call<ShareInfo>("api_share_info", { code }),
+  shareUnlock: (code: string, password: string) =>
+    call<{ ok: boolean }>("api_share_unlock", { code, password }),
+
   clearCache: () => invoke<void>("cache_clear"),
   netDiag: () => invoke<Record<string, unknown>>("net_diag"),
   postLike: (id: number, on: boolean) => invoke<unknown>("api_post_like", { id, on }),
@@ -118,6 +130,19 @@ export const api = {
   checkUpdate: () => call<UpdateInfo>("check_update"),
   openUrl: (url: string) => call<void>("open_url", { url }),
 };
+
+/* ── 分享 ───────────────────────────────────────────────── */
+
+export type ShareState = "active" | "revoked" | "expired" | "missing";
+
+export type ShareInfo = {
+  title: string;
+  episode_count: number;
+  need_password: boolean;
+  state: ShareState;
+};
+
+export type ShareCreated = { code: string; url: string; expires_at: string };
 
 /* ── 更新检查 ───────────────────────────────────────────── */
 

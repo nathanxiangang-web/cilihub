@@ -13,6 +13,8 @@ import LibraryPage from "./pages/LibraryPage";
 import CategoriesHomePage from "./pages/CategoriesHomePage";
 import SyncPage from "./pages/SyncPage";
 import DiagnosticsPage from "./pages/DiagnosticsPage";
+import UsersPage from "./pages/UsersPage";
+import SharesPage from "./pages/SharesPage";
 import SystemPage from "./pages/SystemPage";
 
 const TITLES: Record<AdminPageKey, string> = {
@@ -21,6 +23,8 @@ const TITLES: Record<AdminPageKey, string> = {
   categories: "分类与首页",
   sync: "OpenList 同步",
   diagnostics: "播放诊断",
+  users: "用户",
+  shares: "分享",
   system: "系统与审计",
 };
 
@@ -85,6 +89,8 @@ export default function AdminApp() {
           {page === "categories" ? <CategoriesHomePage /> : null}
           {page === "sync" ? <SyncPage /> : null}
           {page === "diagnostics" ? <DiagnosticsPage /> : null}
+          {page === "users" ? <UsersPage /> : null}
+          {page === "shares" ? <SharesPage /> : null}
           {page === "system" ? <SystemPage /> : null}
         </div>
       </div>

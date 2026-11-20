@@ -3,7 +3,7 @@ import { setOrientation } from "../rpc";
 import { api, cover, fmt, fmtTime, isMobile, isOpenListLibrary } from "../api";
 import type { Detail, Episode, Post, VideoCard } from "../types";
 import { useStore } from "../store";
-import { Avatar, Img, Sheet } from "./ui";
+import { Avatar, Img, Modal, Sheet } from "./ui";
 import VideoSurface, { type VideoHandle } from "./VideoSurface";
 import PlayerControls from "./PlayerControls";
 import PlaybackLock from "./PlaybackLock";
@@ -28,6 +28,9 @@ type Props = {
   startEp?: number;
   startTime?: number;
 };
+
+/** 分享有效期选项：0 = 永久 */
+const SHARE_DAYS: [number, string][] = [[0, "永久"], [7, "7 天"], [30, "30 天"]];
 
 export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind = "video", active, bottomInset, onBack, onNearEnd, startEp, startTime }: Props) {
   const store = useStore();
@@ -197,6 +200,42 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
       ? new URL(`/media/library/${curId}`, window.location.origin).href
       : kind === "post" ? (posts[curId]?.video_url || meta.title) : `https://huangguoai.com/video/${curId}/`;
     navigator.clipboard?.writeText(u).then(() => toast("链接已复制", "ok")).catch(() => {});
+  };
+
+  /* 分享弹窗：有效期 + 可选提取码 → 生成链接并复制 */
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareDays, setShareDays] = useState(0);
+  const [sharePwd, setSharePwd] = useState("");
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareOut, setShareOut] = useState<{ url: string; expires_at?: string } | null>(null);
+
+  const copyShare = (url: string) => {
+    navigator.clipboard?.writeText(url).then(() => toast("链接已复制", "ok")).catch(() => {});
+  };
+
+  const openShare = () => {
+    if (kind === "post") { shareLink(); return; }
+    if (!user) { toast("请先登录", "info"); setLoginOpen(true); return; }
+    setShareDays(0);
+    setSharePwd("");
+    setShareOut(null);
+    setShareOpen(true);
+  };
+
+  const doShare = async () => {
+    if (shareBusy) return;
+    setShareBusy(true);
+    try {
+      const pwd = sharePwd.trim();
+      const res = await api.shareCreate(curId, curEp, pwd || undefined, shareDays);
+      const url = new URL(res.url, location.origin).href;
+      setShareOut({ url, expires_at: res.expires_at });
+      copyShare(url);
+    } catch (e) {
+      toast((e as Error).message || "生成分享失败", "info");
+    } finally {
+      setShareBusy(false);
+    }
   };
 
   /* 倍速：长按 / 锁定 → 2.0x，否则用基准倍速 */
@@ -1076,7 +1115,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
                     <IExpand size={26} className="hg-ink hg-ov-shadow" />
                     <span className="text-[10.5px] hg-ink-2 hg-ov-shadow">全屏</span>
                   </button>
-                  <button onClick={shareLink} className="flex flex-col items-center gap-1 pressable" aria-label="分享">
+                  <button onClick={openShare} className="flex flex-col items-center gap-1 pressable" aria-label="分享">
                     <ILink size={25} className="hg-ink hg-ov-shadow" />
                     <span className="text-[10.5px] hg-ink-2 hg-ov-shadow">分享</span>
                   </button>
@@ -1122,7 +1161,7 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
                   </>
                 )}
 
-                <button onClick={shareLink} className="flex flex-col items-center gap-1 pressable">
+                <button onClick={openShare} className="flex flex-col items-center gap-1 pressable">
                   <ILink size={25} className="text-white tsh" />
                   <span className="text-[10.5px] text-white/90">分享</span>
                 </button>
@@ -1328,6 +1367,58 @@ export default function Feed({ videoIds, startIndex = 0, title = "", mode, kind 
             className="hg-chip w-9 h-9 rounded-full flex items-center justify-center pressable elev-1"><ISearch size={18} /></button>
         </div>
       )}
+      {/* 分享弹窗：有效期 / 提取码（选填） → 生成并复制链接 */}
+      <Modal open={shareOpen} onClose={() => setShareOpen(false)} width={360}>
+        <div className="p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="w-8 h-8 rounded-(--r-sm) bg-pc text-on-pc flex items-center justify-center"><ILink size={16} /></span>
+            <span className="text-[15px] font-bold text-on">分享作品</span>
+            <button onClick={() => setShareOpen(false)} aria-label="关闭"
+              className="ml-auto w-7 h-7 rounded-full bg-s4 flex items-center justify-center text-mut pressable">
+              <IClose size={13} />
+            </button>
+          </div>
+
+          {shareOut ? (
+            <>
+              <div className="text-[11.5px] text-mut mb-1.5">
+                分享链接{shareOut.expires_at ? `（有效期至 ${shareOut.expires_at}）` : "（永久有效）"}
+              </div>
+              <div className="rounded-(--r-sm) bg-s4 p-3 text-[12px] text-on break-all">{shareOut.url}</div>
+              <div className="flex gap-2 mt-4">
+                <button onClick={() => copyShare(shareOut.url)}
+                  className="flex-1 h-9 rounded-(--r-ctl) bg-s3 text-[12.5px] text-on pressable">复制链接</button>
+                <button onClick={() => setShareOpen(false)}
+                  className="flex-1 h-9 rounded-(--r-ctl) bg-primary text-[12.5px] font-semibold text-on-primary pressable">完成</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-[11px] font-semibold text-dim mb-1.5">有效期</div>
+              <div className="flex bg-s4 rounded-(--r-ctl) p-1 mb-3">
+                {SHARE_DAYS.map(([days, label]) => (
+                  <button key={days} onClick={() => setShareDays(days)}
+                    className={`flex-1 h-8 rounded-(--r-ctl) text-[12px] font-semibold pressable ${shareDays === days ? "bg-primary text-on-primary" : "text-mut"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <input value={sharePwd} onChange={(e) => setSharePwd(e.target.value)}
+                placeholder="提取码（可选，留空则无需提取码）"
+                onKeyDown={(e) => { if (e.key === "Enter") doShare(); }}
+                className="w-full h-10 px-3.5 rounded-(--r-sm) bg-s4 text-[13px] text-on placeholder-mut outline-none focus:ring-2 focus:ring-[var(--p-primary)]" />
+              <button onClick={doShare} disabled={shareBusy}
+                className="mt-4 w-full h-10 rounded-(--r-ctl) bg-primary text-on-primary text-[13px] font-bold pressable disabled:opacity-60">
+                {shareBusy ? "生成中…" : "生成链接"}
+              </button>
+              <p className="text-[10.5px] text-dim mt-3 leading-relaxed">
+                链接形如 /s/分享码，打开即可观看；取消分享后立即失效。
+              </p>
+            </>
+          )}
+        </div>
+      </Modal>
+
       {controlsLocked && <PlaybackLock active={active} onUnlock={() => { setControlsLocked(false); wake(); }} />}
     </div>
   );

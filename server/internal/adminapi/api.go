@@ -162,6 +162,40 @@ func (h *router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if allowMethod(w, r, http.MethodGet) {
 			h.overview(w, r, admin)
 		}
+	case len(seg) == 1 && seg[0] == "users":
+		switch r.Method {
+		case http.MethodGet:
+			h.listUsers(w, r, admin)
+		case http.MethodPost:
+			h.createUser(w, r, admin)
+		default:
+			allowMethod(w, r, http.MethodGet, http.MethodPost)
+		}
+	case len(seg) == 2 && seg[0] == "users":
+		switch r.Method {
+		case http.MethodPost:
+			h.updateUser(w, r, admin, seg[1])
+		case http.MethodDelete:
+			h.deleteUser(w, r, admin, seg[1])
+		default:
+			allowMethod(w, r, http.MethodPost, http.MethodDelete)
+		}
+	case len(seg) == 1 && seg[0] == "shares":
+		if allowMethod(w, r, http.MethodGet) {
+			h.listShares(w, r, admin)
+		}
+	case len(seg) == 3 && seg[0] == "shares" && seg[2] == "revoke":
+		if allowMethod(w, r, http.MethodPost) {
+			h.revokeShare(w, r, admin, seg[1])
+		}
+	case len(seg) == 3 && seg[0] == "shares" && seg[2] == "restore":
+		if allowMethod(w, r, http.MethodPost) {
+			h.restoreShare(w, r, admin, seg[1])
+		}
+	case len(seg) == 2 && seg[0] == "shares":
+		if allowMethod(w, r, http.MethodDelete) {
+			h.deleteShare(w, r, admin, seg[1])
+		}
 	case len(seg) == 1 && seg[0] == "works":
 		if allowMethod(w, r, http.MethodGet) {
 			h.listWorks(w, r, admin)

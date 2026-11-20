@@ -1,12 +1,18 @@
 package commands
 
 import (
-	"encoding/json"
 	"errors"
+	"net/http"
+	"regexp"
 	"strings"
+	"time"
+	"unicode/utf8"
 
-	"github.com/nathanxiangang-web/cilihub/server/internal/session"
+	"github.com/nathanxiangang-web/cilihub/server/internal/store"
+	"github.com/nathanxiangang-web/cilihub/server/internal/userauth"
 )
+
+var usernamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{3,32}$`)
 
 func authRoutes() map[string]command {
 	return map[string]command{
@@ -19,17 +25,32 @@ func authRoutes() map[string]command {
 	}
 }
 
+func userPayload(row store.UserRow) map[string]any {
+	return map[string]any{"user": map[string]any{
+		"id":       row.ID,
+		"username": row.Username,
+		"nickname": row.Username,
+		"avatar":   "",
+	}}
+}
+
 func appBoot(c *call) (any, error) {
-	token := c.h.token(c.r)
-	user := json.RawMessage("null")
-	if token != "" {
-		if raw, err := c.h.edge(c.r.Context(), "GET", "/api/account/me", nil, token); err == nil {
-			user = raw
+	row, loggedIn, err := c.h.currentUser(c.r)
+	if err != nil {
+		return nil, errors.New("读取账号失败：" + err.Error())
+	}
+	user := any(nil)
+	if loggedIn {
+		user = map[string]any{
+			"id":       row.ID,
+			"username": row.Username,
+			"nickname": row.Username,
+			"avatar":   "",
 		}
 	}
 	return map[string]any{
 		"user":            user,
-		"logged_in":       token != "",
+		"logged_in":       loggedIn,
 		"base":            c.h.deps.Base(),
 		"strict_security": true,
 		"cli_relaxed":     false,
@@ -41,83 +62,110 @@ func securitySet(c *call) (any, error) {
 	return true, nil
 }
 
-func apiLogin(c *call) (any, error) {
-	origin := c.h.deps.Base()
-	raw, err := c.h.edge(c.r.Context(), "POST", "/api/account/loginByPassword", map[string]any{
-		"username": c.p.str("username"),
-		"password": c.p.str("password"),
-	}, "")
+func apiRegister(c *call) (any, error) {
+	username := strings.TrimSpace(c.p.str("username"))
+	password := c.p.str("password")
+	if !usernamePattern.MatchString(username) {
+		return nil, errors.New("账号需 3-32 位字母、数字、下划线或短横线")
+	}
+	if utf8.RuneCountInString(password) < 6 {
+		return nil, errors.New("密码至少 6 位")
+	}
+	hash, err := userauth.HashPassword(password)
 	if err != nil {
+		return nil, errors.New("注册失败：" + err.Error())
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	row, err := c.h.deps.Store.CreateUser(username, hash, "", now)
+	if err != nil {
+		if err.Error() == "该账号已被注册" {
+			return nil, err
+		}
+		return nil, errors.New("注册失败：" + err.Error())
+	}
+	if err := c.h.startUserSession(c.w, c.r, row.ID); err != nil {
 		return nil, err
 	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		return nil, errors.New("登录返回缺少 token")
-	}
-	token, ok := rawString(fields["token"])
-	if !ok {
-		return nil, errors.New("登录返回缺少 token")
-	}
-	if c.h.deps.Base() != origin {
-		return nil, errors.New("登录期间线路已变化，请重新登录")
-	}
-	session.Set(c.w, c.r, token)
-	user := json.RawMessage("null")
-	if value, ok := fields["user"]; ok {
-		user = value
-	}
-	return map[string]json.RawMessage{"user": user}, nil
+	return userPayload(row), nil
 }
 
-func apiRegister(c *call) (any, error) {
-	origin := c.h.deps.Base()
-	email := c.p.str("email")
+func apiLogin(c *call) (any, error) {
+	username := strings.TrimSpace(c.p.str("username"))
 	password := c.p.str("password")
-	body := map[string]any{
-		"username":         c.p.str("username"),
-		"password":         password,
-		"confirm_password": password,
+	if username == "" || password == "" {
+		return nil, errors.New("账号或密码不正确")
 	}
-	if strings.TrimSpace(email) != "" {
-		body["email"] = email
-	}
-	raw, err := c.h.edge(c.r.Context(), "POST", "/api/account/registerByPassword", body, "")
+	row, hash, err := c.h.deps.Store.FindUserCredential(username)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, errors.New("账号或密码不正确")
+		}
+		return nil, errors.New("登录失败：" + err.Error())
 	}
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &fields); err != nil {
-		return nil, errors.New("注册返回缺少 token")
+	if !userauth.VerifyPassword(hash, password) {
+		return nil, errors.New("账号或密码不正确")
 	}
-	token, ok := rawString(fields["token"])
-	if !ok {
-		return nil, errors.New("注册返回缺少 token")
+	if row.Status != "active" {
+		return nil, errors.New("账号已被禁用")
 	}
-	if c.h.deps.Base() != origin {
-		return nil, errors.New("注册期间线路已变化，请重新登录")
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	token, tokenHash := userauth.NewToken()
+	expiresAt := time.Now().UTC().Add(userauth.SessionTTL).Format(time.RFC3339)
+	if err := c.h.deps.Store.PutUserSession(tokenHash, row.ID, expiresAt, now); err != nil {
+		return nil, errors.New("创建会话失败：" + err.Error())
 	}
-	session.Set(c.w, c.r, token)
-	user := json.RawMessage("null")
-	if value, ok := fields["user"]; ok {
-		user = value
+	userauth.SetCookie(c.w, c.r, token)
+	if err := c.h.deps.Store.TouchUserLogin(row.ID, now); err != nil {
+		c.h.deps.Log.Printf("更新用户 %d 最近登录时间失败: %v", row.ID, err)
 	}
-	return map[string]json.RawMessage{"user": user}, nil
+	return userPayload(row), nil
 }
 
 func apiLogout(c *call) (any, error) {
-	_, _ = c.h.edge(c.r.Context(), "POST", "/api/account/logout", nil, c.h.token(c.r))
-	session.Clear(c.w, c.r)
+	if token := userauth.TokenFrom(c.r); token != "" {
+		if err := c.h.deps.Store.DeleteUserSession(userauth.HashToken(token)); err != nil {
+			c.h.deps.Log.Printf("删除用户会话失败: %v", err)
+		}
+	}
+	userauth.ClearCookie(c.w, c.r)
 	return map[string]bool{"ok": true}, nil
 }
 
 func apiMe(c *call) (any, error) {
-	origin := c.h.deps.Base()
-	raw, err := c.h.edge(c.r.Context(), "GET", "/api/account/me", nil, c.h.token(c.r))
+	row, loggedIn, err := c.h.currentUser(c.r)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("读取账号失败：" + err.Error())
 	}
-	if c.h.deps.Base() != origin {
-		return nil, errors.New("读取账号期间线路已变化")
+	if !loggedIn {
+		return map[string]any{"user": nil}, nil
 	}
-	return raw, nil
+	return userPayload(row), nil
+}
+
+// currentUser 通过 cili_user 会话读出当前用户；无会话或会话失效时返回 loggedIn=false。
+func (h *router) currentUser(r *http.Request) (store.UserRow, bool, error) {
+	token := userauth.TokenFrom(r)
+	if token == "" {
+		return store.UserRow{}, false, nil
+	}
+	row, err := h.deps.Store.UserBySession(userauth.HashToken(token), time.Now().UTC().Format(time.RFC3339))
+	if errors.Is(err, store.ErrNotFound) {
+		return store.UserRow{}, false, nil
+	}
+	if err != nil {
+		return store.UserRow{}, false, err
+	}
+	return row, true, nil
+}
+
+func (h *router) startUserSession(w http.ResponseWriter, r *http.Request, userID int64) error {
+	token, tokenHash := userauth.NewToken()
+	now := time.Now().UTC().Format(time.RFC3339)
+	expiresAt := time.Now().UTC().Add(userauth.SessionTTL).Format(time.RFC3339)
+	if err := h.deps.Store.PutUserSession(tokenHash, userID, expiresAt, now); err != nil {
+		return errors.New("创建会话失败：" + err.Error())
+	}
+	userauth.SetCookie(w, r, token)
+	return nil
 }

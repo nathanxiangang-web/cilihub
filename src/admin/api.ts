@@ -90,7 +90,7 @@ export type HomeOrder = { pinned: number[]; order: number[] };
 export type WorkPatch = { title?: string; category_id?: number; visible?: boolean; pinned?: boolean };
 
 type RequestOptions = {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "DELETE";
   body?: unknown;
   query?: Record<string, string | number | undefined>;
 };
@@ -277,4 +277,77 @@ export type OpenListBrowse = { path: string; items: OpenListDirEntry[] };
 
 export function browseOpenList(path?: string): Promise<OpenListBrowse> {
   return request<OpenListBrowse>("/openlist/browse", { query: { path } });
+}
+export type UserRow = {
+  id: number;
+  username: string;
+  status: string;
+  note: string;
+  created_at: string;
+  last_login_at: string;
+};
+
+export type UsersPage = { items: UserRow[]; pagination: Pagination };
+
+export type UserCreateInput = { username: string; password: string; note?: string };
+
+export type UserUpdateInput = {
+  username?: string;
+  status?: string;
+  note?: string;
+  /** 留空表示不修改密码 */
+  password?: string;
+};
+
+export function users(q: string, status: string, page = 1, size = 20): Promise<UsersPage> {
+  return request<UsersPage>("/users", { query: { q, status, page, size } });
+}
+
+export async function createUser(input: UserCreateInput): Promise<UserRow> {
+  const res = await request<{ user: UserRow }>("/users", { body: input });
+  return res.user;
+}
+
+export function updateUser(id: number, input: UserUpdateInput): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/users/${id}`, { body: input });
+}
+
+export function deleteUser(id: number): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/users/${id}`, { method: "DELETE" });
+}
+export type ShareRow = {
+  id: number;
+  code: string;
+  work_id: number;
+  work_title: string;
+  creator: string;
+  status: string;
+  expires_at: string;
+  views: number;
+  created_at: string;
+};
+
+export type SharesPage = { items: ShareRow[]; pagination: Pagination };
+
+export function shares(params: {
+  q?: string;
+  status?: string;
+  page?: number;
+  size?: number;
+}): Promise<SharesPage> {
+  return request<SharesPage>("/shares", {
+    query: { q: params.q, status: params.status, page: params.page, size: params.size },
+  });
+}
+
+export function revokeShare(id: number): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/shares/${id}/revoke`, { body: {} });
+}
+
+export function restoreShare(id: number): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/shares/${id}/restore`, { body: {} });
+}
+
+export function deleteShare(id: number): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/shares/${id}`, { method: "DELETE" });
 }

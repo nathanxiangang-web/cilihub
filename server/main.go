@@ -23,6 +23,7 @@ import (
 	"github.com/nathanxiangang-web/cilihub/server/internal/filmcatalog"
 	"github.com/nathanxiangang-web/cilihub/server/internal/media"
 	"github.com/nathanxiangang-web/cilihub/server/internal/secret"
+	"github.com/nathanxiangang-web/cilihub/server/internal/shares"
 	"github.com/nathanxiangang-web/cilihub/server/internal/store"
 	"github.com/nathanxiangang-web/cilihub/server/web"
 )
@@ -71,6 +72,7 @@ func main() {
 		SetBase: line.SetBase,
 		Media:   mediaSvc,
 		Log:     logger,
+		Store:   db,
 	}
 	catalog := filmcatalog.NewUnconfigured(db)
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -112,9 +114,14 @@ func main() {
 	mux.Handle(filmcatalog.MediaPrefix, catalog)
 	go catalog.Run(context.Background(), logger.Printf)
 
+	shareSvc := shares.New(db, catalog, logger)
+	deps.Shares = shareSvc
+
 	adminapi.Register(mux, adminDeps)
 	commands.Register(mux, deps)
 	mux.Handle(media.Prefix+"/", mediaSvc.Handler())
+	// 比 /media/ 更具体，ServeMux 会优先匹配分享播放路由。
+	mux.Handle("/media/share/", shareSvc.Handler())
 	mux.Handle("/", spaHandler(dist))
 
 	srv := &http.Server{
