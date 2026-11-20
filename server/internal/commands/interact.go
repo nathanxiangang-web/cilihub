@@ -91,12 +91,24 @@ func apiCommentsLocal(c *call) (any, error) {
 	}
 	items := make([]map[string]any, 0, len(list.Items))
 	for _, row := range list.Items {
+		// 前端 Comment 类型按扁平字段渲染（user_id/nickname/text/time/…），
+		// 同时保留 user/content 兼容旧结构。
 		items = append(items, map[string]any{
-			"id":         row.ID,
-			"user":       map[string]any{"id": row.UserID, "name": row.Username},
-			"content":    row.Content,
-			"created_at": row.CreatedAt,
-			"ep":         row.EpisodeNo,
+			"id":           row.ID,
+			"user_id":      row.UserID,
+			"nickname":     row.Username,
+			"avatar":       "",
+			"avatar_color": "",
+			"text":         row.Content,
+			"time":         row.CreatedAt,
+			"created_at":   row.CreatedAt,
+			"like_count":   0,
+			"liked":        false,
+			"reply_count":  0,
+			"reply_id":     0,
+			"ep":           row.EpisodeNo,
+			"user":         map[string]any{"id": row.UserID, "name": row.Username, "nickname": row.Username, "avatar": ""},
+			"content":      row.Content,
 		})
 	}
 	return map[string]any{

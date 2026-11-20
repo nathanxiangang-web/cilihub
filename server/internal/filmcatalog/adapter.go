@@ -255,6 +255,11 @@ func (a *Adapter) Edge(_ context.Context, method, resource string) ([]byte, erro
 		data["like_count"] = counts.Likes
 		data["comment_count"] = counts.Comments
 		data["collect_count"] = counts.Favorites
+		// 前端优先读 counts.*，两处必须一致
+		data["counts"] = map[string]int64{
+			"like": counts.Likes, "comment": counts.Comments,
+			"collect": counts.Favorites, "hot": 0,
+		}
 		return json.Marshal(data)
 	case method == http.MethodGet && action == "comments":
 		return json.Marshal(emptyPage(u.Query()))
