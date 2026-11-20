@@ -365,8 +365,8 @@ func (h *router) changePassword(w http.ResponseWriter, r *http.Request, admin st
 		writeError(w, http.StatusOK, "原密码不正确")
 		return
 	}
-	if n := utf8.RuneCountInString(req.NewPassword); n < 6 || n > 128 {
-		writeError(w, http.StatusOK, "新密码长度需为 6-128 个字符")
+	if n := utf8.RuneCountInString(req.NewPassword); n < 1 || n > 128 {
+		writeError(w, http.StatusOK, "新密码长度需为 1-128 个字符")
 		return
 	}
 

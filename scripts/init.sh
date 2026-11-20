@@ -12,7 +12,7 @@ if [ -f "$env_file" ]; then
   exit 0
 fi
 
-admin_password="$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | cut -c1-16)"
+admin_password="admin"   # 默认 admin/admin；首次登录后请立即修改
 secret="$(openssl rand -base64 32)"
 
 umask 077

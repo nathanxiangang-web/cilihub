@@ -191,11 +191,8 @@ func ensureAdmin(db *store.Store, dataDir string, logger *log.Logger) {
 	password := strings.TrimSpace(os.Getenv("CILIHUB_ADMIN_PASSWORD"))
 	generated := false
 	if password == "" {
-		password, err = randomPassword(16)
-		if err != nil {
-			logger.Fatalf("生成初始管理员密码失败: %v", err)
-		}
-		generated = true
+		// 用户要求默认账号密码为 admin/admin；生产部署请在首次登录后立即修改。
+		password = "admin"
 	}
 	passwordFile := filepath.Join(dataDir, "admin-initial-password.txt")
 	// 先落盘再建号：文件写不成功时管理员尚未创建，下次启动可重新生成。
