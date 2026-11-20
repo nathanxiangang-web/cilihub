@@ -96,13 +96,7 @@ export const CAT_ICONS: Record<string, ReturnType<typeof S>> = {
 };
 
 export function Logo({ size = 28, className = "" }: { size?: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 48 48" className={className} aria-hidden>
-      <rect x="2" y="2" width="44" height="44" rx="12" fill="var(--p-primary)" />
-      <path d="M31 15a12 12 0 1 0 0 18" stroke="var(--p-on-primary)" strokeWidth="4" strokeLinecap="round" fill="none" />
-      <path d="M24 18v12l11-6z" fill="var(--p-on-primary)" />
-    </svg>
-  );
+  return <img src="/logo.png" width={size} height={size} className={`shrink-0 ${className}`} alt="" />;
 }
 export const IList = S(<><path d="M8.5 6.5h11" /><path d="M8.5 12h11" /><path d="M8.5 17.5h11" /><circle cx="4.6" cy="6.5" r="1.2" fill="currentColor" stroke="none" /><circle cx="4.6" cy="12" r="1.2" fill="currentColor" stroke="none" /><circle cx="4.6" cy="17.5" r="1.2" fill="currentColor" stroke="none" /></>);
 export const IFileText = S(<><path d="M6.5 3.5h7.2l3.8 3.8v13.2H6.5z" /><path d="M13.7 3.5v3.8h3.8" /><path d="M9.4 12.2h5.2" /><path d="M9.4 15.6h5.2" /></>);
