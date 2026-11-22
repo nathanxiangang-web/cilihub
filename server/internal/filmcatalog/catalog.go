@@ -100,6 +100,9 @@ func (c *catalog) fail(runID int64, cause error) {
 func nowText() string { return time.Now().UTC().Format(time.RFC3339) }
 
 func (c *catalog) scan(ctx context.Context) ([]store.ScannedFile, error) {
+	if store.IsCloudPrivatePath(c.root) {
+		return nil, errors.New("OpenList 公开目录不能指向私人云下载目录")
+	}
 	result := make([]store.ScannedFile, 0)
 	queue := []string{c.root}
 	seen := map[string]bool{c.root: true}
@@ -132,7 +135,7 @@ func (c *catalog) scan(ctx context.Context) ([]store.ScannedFile, error) {
 					continue
 				}
 				fullPath := path.Join(folder, item.Name)
-				if seen[fullPath] {
+				if seen[fullPath] || store.IsCloudPrivatePath(fullPath) {
 					continue
 				}
 				seen[fullPath] = true
@@ -140,7 +143,7 @@ func (c *catalog) scan(ctx context.Context) ([]store.ScannedFile, error) {
 					queue = append(queue, fullPath)
 					continue
 				}
-				if !isVideo(item.Name) {
+				if !isVideo(item.Name) || (store.IsCloudCollectorPath(fullPath) && !strings.EqualFold(path.Ext(item.Name), ".mp4")) {
 					continue
 				}
 				result = append(result, store.ScannedFile{Path: fullPath, Name: item.Name, Size: item.Size})

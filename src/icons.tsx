@@ -15,6 +15,7 @@ const S = (d: React.ReactNode, fill = false) =>
 export const IHome = S(<><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h5v-6h4v6h5V9.5" /></>);
 export const IHomeF = S(<path d="M12 2.6 2.8 10.2a1 1 0 0 0 .64 1.77H4v8.2A1.8 1.8 0 0 0 5.8 22H9.4v-5.6a2.6 2.6 0 0 1 5.2 0V22h3.6a1.8 1.8 0 0 0 1.8-1.8V12h.56a1 1 0 0 0 .64-1.77Z" />, true);
 export const ISearch = S(<><circle cx="11" cy="11" r="7" /><path d="m20.4 20.4-3.2-3.2" /></>);
+export const ICloudDownload = S(<><path d="M7 17H5.5a3.5 3.5 0 0 1-.2-7 6 6 0 0 1 11.6-1.1A4.1 4.1 0 1 1 18 17h-1" /><path d="M12 12v9m-3-3 3 3 3-3" /></>);
 const grid = <><rect x="3.5" y="3.5" width="7.2" height="7.2" rx="2.2" /><rect x="13.3" y="3.5" width="7.2" height="7.2" rx="2.2" /><rect x="3.5" y="13.3" width="7.2" height="7.2" rx="2.2" /><rect x="13.3" y="13.3" width="7.2" height="7.2" rx="2.2" /></>;
 export const IGrid = S(grid);
 export const IGridF = S(<><rect x="3" y="3" width="8" height="8" rx="2.4" /><rect x="13" y="3" width="8" height="8" rx="2.4" /><rect x="3" y="13" width="8" height="8" rx="2.4" /><rect x="13" y="13" width="8" height="8" rx="2.4" /></>, true);

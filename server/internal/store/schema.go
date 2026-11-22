@@ -87,7 +87,7 @@ var schemaStatements = []string{
 const defaultCategorySQL = `INSERT INTO categories(slug,name,sort_index,visible) VALUES('openlist-films','影视',0,TRUE) ON CONFLICT (slug) DO NOTHING`
 
 func (s *Store) initSchema() error {
-	for _, stmt := range schemaStatements {
+	for _, stmt := range append(append([]string(nil), schemaStatements...), cloudSchema...) {
 		if _, err := s.db.Exec(stmt); err != nil {
 			return fmt.Errorf("创建数据表失败: %w", err)
 		}

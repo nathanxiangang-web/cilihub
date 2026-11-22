@@ -24,9 +24,11 @@ type testSource struct{}
 func (*testSource) list(_ context.Context, folder string) ([]entry, error) {
 	switch folder {
 	case "/影视":
-		return []entry{{Name: "影片集.mp4", Dir: true}, {Name: "sample.srt"}, {Name: "top.MKV", Size: 9}}, nil
+		return []entry{{Name: "影片集.mp4", Dir: true}, {Name: "sample.srt"}, {Name: "top.MKV", Size: 9}, {Name: "cilihub-collected-demo", Dir: true}}, nil
 	case "/影视/影片集.mp4":
 		return []entry{{Name: "child.mp4"}, {Name: "../outside.mp4"}}, nil
+	case "/影视/cilihub-collected-demo":
+		return []entry{{Name: "included.MP4"}, {Name: "extra.mkv"}}, nil
 	default:
 		return nil, fmt.Errorf("unexpected directory %q", folder)
 	}
@@ -43,12 +45,13 @@ func TestScanFlattensVideoFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 2 {
-		t.Fatalf("expected 2 video files, got %+v", files)
+	if len(files) != 3 {
+		t.Fatalf("expected 3 video files, got %+v", files)
 	}
 	want := map[string]bool{
-		"/影视/影片集.mp4/child.mp4": true,
-		"/影视/top.MKV":             true,
+		"/影视/影片集.mp4/child.mp4":                   true,
+		"/影视/top.MKV":                             true,
+		"/影视/cilihub-collected-demo/included.MP4": true,
 	}
 	for _, file := range files {
 		if !want[file.Path] {

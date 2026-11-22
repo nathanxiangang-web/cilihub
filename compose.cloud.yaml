@@ -1,0 +1,17 @@
+services:
+  web:
+    environment:
+      CILIHUB_115_PRIVATE_ROOT: "${CILIHUB_115_PRIVATE_ROOT:-}"
+      CILIHUB_115_COLLECTOR_ROOT: "${CILIHUB_115_COLLECTOR_ROOT:-}"
+      CILIHUB_115_COOKIE_FILE: /run/cloud/cookie
+      CILIHUB_COLLECTOR_TOKEN_FILE: /run/cloud/collector-token
+      CILIHUB_115_CDN_HOST: "${CILIHUB_115_CDN_HOST:-cdnfhnfile.115cdn.net}"
+      CILIHUB_MAGCRAW_ORIGIN: "${CILIHUB_MAGCRAW_ORIGIN:-}"
+      CILIHUB_MAGCRAW_KEY_FILE: /run/cloud/magcraw-key
+    volumes:
+      - type: bind
+        source: "${CILIHUB_CLOUD_SECRET_DIR:-./private/cloud}"
+        target: /run/cloud
+        read_only: true
+        bind:
+          create_host_path: false

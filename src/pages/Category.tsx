@@ -41,7 +41,7 @@ export default function Category({ wide, active }: { wide: boolean; active: bool
         const result = await api.posts(1, 8);
         if (mounted.current) setPosts(result?.items || []);
       } else {
-        const result = await api.category(key, 1, 8);
+        const result = await (isOpenListLibrary ? api.feed(1, 8) : api.category(key, 1, 8));
         if (mounted.current) setRows(m => ({ ...m, [key]: result?.items || [] }));
       }
     } catch (error) {
@@ -85,8 +85,9 @@ export default function Category({ wide, active }: { wide: boolean; active: bool
           const list = rows[c.cate] || [];
           return (
             <section key={c.cate} aria-label={c.name} className="mb-5 a-rise" style={{ animationDelay: `${Math.min(ci * 50, 300)}ms` }}>
-              <button onClick={() => push({ kind: "channel", cate: c.cate, name: c.name })}
-                className="w-full flex items-center gap-2.5 px-4 mb-2.5 text-left pressable group">
+              <button type="button" aria-label={`查看全部${c.name}`}
+                onClick={() => push({ kind: "channel", cate: c.cate, name: c.name })}
+                className="w-full min-h-11 flex items-center gap-2.5 px-4 mb-2.5 text-left pressable group">
                 <span className="w-[36px] h-[36px] rounded-(--r-sm) tonal flex items-center justify-center shrink-0 text-primary">
                   <IGrid size={19} strokeWidth={1.9} />
                 </span>
@@ -94,7 +95,7 @@ export default function Category({ wide, active }: { wide: boolean; active: bool
                   <span className="block text-[15.5px] font-semibold text-on leading-tight">{c.name}</span>
                   <span className="block text-[10.5px] text-mut mt-0.5 truncate">{c.desc}</span>
                 </span>
-                <span className="flex items-center gap-0.5 text-[11.5px] text-mut group-hover:text-primary transition-colors">
+                <span className="flex shrink-0 items-center gap-1 rounded-(--r-ctl) bg-s3 px-3 py-2 text-[12px] font-semibold text-on group-hover:text-primary transition-colors">
                   全部<IChevR size={14} />
                 </span>
               </button>
@@ -160,42 +161,51 @@ export function ChannelPage({ cate, name, onBack, wide }: { cate: string; name: 
   const [items, setItems] = useState<VideoCard[]>([]);
   const [page, setPage] = useState(0);
   const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const busy = useRef(false);
+  const scroll = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
 
-  const loadMore = async () => {
+  const loadMore = useCallback(async () => {
     if (busy.current || page >= pages) return;
     busy.current = true;
     setLoading(true);
+    setErr(null);
     try {
       const next = page + 1;
-      const res = await api.category(cate, next, 20);
+      const res = await (isOpenListLibrary ? api.feed(next, 20) : api.category(cate, next, 20));
+      const batch = res.items ?? [];
       setItems((prev) => {
         const seen = new Set(prev.map((x) => x.id));
-        return [...prev, ...(res?.items || []).filter((x) => !seen.has(x.id))];
+        return [...prev, ...batch.filter((x) => !seen.has(x.id))];
       });
+      setTotal(res.pagination?.total ?? null);
+      setPages(Math.max(next, res.pagination?.pages ?? next));
       setPage(next);
-      setPages(res?.pagination?.pages || next);
-      setErr(null);
     } catch (e) {
       setErr((e as Error).message || "加载失败");
     } finally {
       busy.current = false;
       setLoading(false);
     }
-  };
+  }, [cate, page, pages]);
 
-  useEffect(() => { loadMore(); /* eslint-disable-next-line */ }, []);
   useEffect(() => {
+    if (page === 0 && !err) void loadMore();
+  }, [page, err, loadMore]);
+
+  useEffect(() => {
+    const root = scroll.current;
     const el = sentinel.current;
-    if (!el) return;
-    const io = new IntersectionObserver((es) => { if (es[0].isIntersecting) loadMore(); }, { rootMargin: "600px" });
+    if (!root || !el || !page || page >= pages || err || loading || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting) void loadMore();
+    }, { root, rootMargin: "0px 0px 160px" });
     io.observe(el);
     return () => io.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pages]);
+  }, [page, pages, err, loading, loadMore]);
 
   const sorted = [...items].sort((a, b) => {
     if (sort === "最热") return (b.hot || 0) - (a.hot || 0);
@@ -207,11 +217,13 @@ export function ChannelPage({ cate, name, onBack, wide }: { cate: string; name: 
     <div className="absolute inset-0 bg-bg flex flex-col">
       <div className="shrink-0 bg-s1" style={{ paddingTop: "var(--sat, 0px)" }}>
         <div className="px-3 pt-2 pb-3 flex items-center gap-2.5">
-          <button onClick={onBack} className="w-10 h-10 rounded-full flex items-center justify-center text-on hover:bg-s3 pressable"><IBack size={20} /></button>
+          <button onClick={onBack} aria-label="返回分类" className="w-10 h-10 rounded-full flex items-center justify-center text-on hover:bg-s3 pressable"><IBack size={20} /></button>
           <span className="w-[40px] h-[40px] rounded-(--r-sm) bg-pc text-on-pc flex items-center justify-center"><IGrid size={21} strokeWidth={1.9} /></span>
           <div className="flex-1 min-w-0">
-            <div className="text-[17px] font-bold text-on leading-tight">{name}</div>
-            <div className="text-[10.5px] text-mut">共 {items.length} 部 · 已加载 {page}/{Math.max(pages, 1)} 页</div>
+            <h1 className="text-[17px] font-bold text-on leading-tight">{isOpenListLibrary ? `全部${name}` : name}</h1>
+            <div className="text-[10.5px] text-mut" aria-live="polite">
+              {total !== null && `共 ${total} 部 · `}已加载 {items.length} 部
+            </div>
           </div>
         </div>
         <div className="px-4 pb-3 flex gap-2">
@@ -222,16 +234,25 @@ export function ChannelPage({ cate, name, onBack, wide }: { cate: string; name: 
           ))}
         </div>
       </div>
-      <div className="flex-1 scroll-y px-4 pt-3 pb-8">
+      <div ref={scroll} className="flex-1 scroll-y px-4 pt-3 pb-8">
         {sorted.length ? (
           <Masonry videos={sorted} wide={wide} onOpen={(v) => push({ kind: "feed", videoIds: sorted.map((x) => x.id), index: sorted.findIndex((x) => x.id === v.id), title: name })} />
         ) : err ? (
           <Empty icon={<IGrid size={26} />} title="加载失败" sub={err} action="重试" onAction={loadMore} />
-        ) : (
-          <div className="flex justify-center py-10"><div className="w-8 h-8 spinner" /></div>
+        ) : page > 0 ? (
+          <Empty icon={<IGrid size={26} />} title="暂无影视" />
+        ) : null}
+        <div ref={sentinel} className="h-4" />
+        {loading && <div role="status" aria-label="正在加载影视" className="flex justify-center py-3"><div className="w-6 h-6 spinner" /></div>}
+        {!loading && page > 0 && page < pages && (
+          <div className="flex flex-col items-center gap-2 py-3">
+            {err && <p role="alert" className="text-xs text-mut">{err}</p>}
+            <button type="button" onClick={() => void loadMore()}
+              className="rounded-(--r-ctl) bg-s3 px-4 py-2 text-sm font-semibold text-on pressable">
+              {err ? "重试" : "加载更多"}
+            </button>
+          </div>
         )}
-        <div ref={sentinel} className="h-10" />
-        {loading && <div className="flex justify-center py-3"><div className="w-6 h-6 spinner" /></div>}
         {!loading && page >= pages && sorted.length > 0 && (
           <div className="text-center text-[10.5px] text-dim py-3">— 已经到底啦 —</div>
         )}

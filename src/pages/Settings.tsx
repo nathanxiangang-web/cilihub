@@ -188,7 +188,7 @@ export default function Settings({ onBack, wide }: { onBack: () => void; wide: b
               <span className="w-8 h-8 rounded-full bg-s3 flex items-center justify-center text-primary"><IRefresh size={16} /></span>
               <div className="flex-1">
                 <div className="text-[12.5px] text-on">检查更新</div>
-                <div className="text-[10.5px] text-mut">{checking ? "检查中…" : `当前 v${APP_VERSION} · 对比 GitHub Release`}</div>
+                <div className="text-[10.5px] text-mut">{checking ? "检查中…" : `当前 ${APP_VERSION} · 对比 GitHub Release`}</div>
               </div>
               <IChevR size={15} className="text-mut" />
             </button>
@@ -214,7 +214,7 @@ export default function Settings({ onBack, wide }: { onBack: () => void; wide: b
             <Logo size={44} />
             <div>
               <div className="text-[16px] font-bold text-on leading-tight">{APP_NAME}</div>
-              <div className="text-[11px] text-mut mt-0.5">Web v{APP_VERSION}</div>
+              <div className="text-[11px] text-mut mt-0.5">{APP_VERSION}</div>
             </div>
           </div>
 

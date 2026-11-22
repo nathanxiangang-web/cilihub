@@ -4,7 +4,8 @@ import { APP_NAME } from "../branding";
 import type { Detail } from "../types";
 import { useStore } from "../store";
 import { Avatar, Empty, Img } from "../components/ui";
-import { IChevR, IClock, ILogout, ISettings, IStar, IUser } from "../icons";
+import { IChevR, IClock, ICloudDownload, ILogout, ISettings, IStar, IUser } from "../icons";
+import { isWeb } from "../rpc";
 
 /* 我的：结构固定（资料卡 + 我的收藏 / 观看历史）。
    未登录时收藏与观看记录都来自本地；登录后收藏以服务端为准，观看记录仍在本地。 */
@@ -81,6 +82,13 @@ export default function Profile({ wide }: { wide: boolean }) {
             </span>
           </button>
         )}
+
+        {isWeb && <button onClick={() => push({ kind: "cloud" })}
+          className="mt-3 flex w-full items-center gap-3 rounded-(--r-lg) bg-s1 p-3.5 text-left text-on pressable">
+          <ICloudDownload size={20} strokeWidth={1.7} />
+          <span className="flex-1 text-sm font-semibold">云下载</span>
+          <IChevR size={16} className="text-mut" />
+        </button>}
 
         {/* 我的内容 */}
         <div className="flex bg-s3 rounded-(--r-ctl) p-1 mt-4">

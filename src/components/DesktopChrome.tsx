@@ -6,7 +6,7 @@ import { APP_NAME } from "../branding";
 import { isWeb } from "../rpc";
 import { Avatar } from "./ui";
 import {
-  IClose, IGrid, IGridF, IHome, IHomeF, IMinus, IMoon, IRestore, ISearch, ISettings, ISidebar,
+  IClose, ICloudDownload, IGrid, IGridF, IHome, IHomeF, IMinus, IMoon, IRestore, ISearch, ISettings, ISidebar,
   ISquare, ISun, ITrophy, IUser, IUserF, Logo,
 } from "../icons";
 
@@ -66,8 +66,7 @@ export function DesktopRail({ collapsed }: { collapsed: boolean }) {
   const { tab, setTab, user, setLoginOpen, push, stack } = useStore();
   /* 从侧栏进入的栈页（排行榜 / 设置）接管高亮，否则「我的」会一直亮着，看起来不像独立页面 */
   const top = stack[stack.length - 1];
-  const railPage: "ranks" | "settings" | null =
-    top?.kind === "settings" ? "settings" : top?.kind === "ranks" ? "ranks" : null;
+  const railPage = top?.kind === "settings" || top?.kind === "ranks" || top?.kind === "cloud" ? top.kind : null;
   const onTab = (key: Tab | "search") => !railPage && tab === key;
   const items: { key: Tab; label: string; Icon: typeof IHome; Filled: typeof IHomeF }[] = [
     { key: "home", label: "首页", Icon: IHome, Filled: IHomeF },
@@ -92,6 +91,12 @@ export function DesktopRail({ collapsed }: { collapsed: boolean }) {
               <span className="win-nav-copy">{label}</span>
             </button>
           ))}
+          {isWeb && <button className={`win-nav-item ${railPage === "cloud" ? "is-selected" : ""}`}
+            aria-label="云下载" aria-current={railPage === "cloud" ? "page" : undefined}
+            onClick={() => { if (railPage !== "cloud") push({ kind: "cloud" }); }}>
+            <span className="win-nav-symbol"><ICloudDownload size={21} strokeWidth={1.7} /></span>
+            <span className="win-nav-copy">云下载</span>
+          </button>}
           <button className={`win-nav-item ${railPage === "ranks" ? "is-selected" : ""}`}
             aria-current={railPage === "ranks" ? "page" : undefined}
             onClick={() => { if (railPage !== "ranks") push({ kind: "ranks" }); }}>

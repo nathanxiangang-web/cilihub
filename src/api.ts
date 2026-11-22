@@ -6,7 +6,7 @@ import type {
 /* ── 运行环境 ───────────────────────────────────────────── */
 
 /** 应用版本（页面左下角展示的 web 版本标识） */
-export const APP_VERSION = "web0.2.1";
+export const APP_VERSION = `web${__APP_VERSION__}`;
 export const isOpenListLibrary = isWeb && import.meta.env.VITE_OPENLIST_LIBRARY === "1";
 
 const ua = navigator.userAgent;

@@ -4,12 +4,13 @@ import type { RankItem, VideoCard } from "../types";
 import { useStore } from "../store";
 import { Masonry, RankRow } from "../components/cards";
 import { Empty } from "../components/ui";
+import MagnetSearch from "../components/MagnetSearch";
 import { IBack, IClose, IFireF, IRefresh, ISearch, ITrophy } from "../icons";
 
 const HOT_TAGS = ["都市", "逆袭", "古风", "系统", "后宫", "校园", "仙侠", "职场", "大男主", "御姐", "脑洞", "奇幻"];
 
 export default function Search({ active, wide }: { active: boolean; wide: boolean }) {
-  const { push, searchHist, addSearch, clearSearchHist, toast } = useStore();
+  const { push, searchHist, addSearch, clearSearchHist, user, setLoginOpen } = useStore();
   const [q, setQ] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [items, setItems] = useState<VideoCard[]>([]);
@@ -17,12 +18,24 @@ export default function Search({ active, wide }: { active: boolean; wide: boolea
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [magnetQuery, setMagnetQuery] = useState<{ term: string; id: number; owner?: number }>();
+  const [magnetRunning, setMagnetRunning] = useState(false);
+  const magnetSequence = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const busy = useRef(false);
 
   useEffect(() => {
     if (active && !/Android/i.test(navigator.userAgent)) inputRef.current?.focus();
   }, [active]);
+
+  const userID = user?.id;
+  useEffect(() => {
+    setMagnetQuery(current => {
+      if (!current?.term) return current;
+      if (current.owner === undefined) return userID === undefined ? current : { ...current, owner: userID };
+      return current.owner === userID ? current : undefined;
+    });
+  }, [userID]);
 
   const run = async (keyword: string, p: number) => {
     if (busy.current) return;
@@ -50,6 +63,7 @@ export default function Search({ active, wide }: { active: boolean; wide: boolea
   const submit = (keyword: string) => {
     const k = keyword.trim();
     if (!k) return;
+    setMagnetQuery(undefined);
     setSubmitted(k);
     addSearch(k);
     setItems([]);
@@ -57,6 +71,14 @@ export default function Search({ active, wide }: { active: boolean; wide: boolea
     run(k, 1);
   };
 
+  function submitMagnet() {
+    const term = q.trim();
+    setMagnetQuery({ term, id: ++magnetSequence.current, owner: userID });
+    if (!term) inputRef.current?.focus();
+    else if (!user) setLoginOpen(true);
+  }
+
+  const showMagnet = magnetQuery && (magnetQuery.owner === undefined || magnetQuery.owner === userID);
   const querying = submitted.length > 0;
 
   return (
@@ -66,10 +88,15 @@ export default function Search({ active, wide }: { active: boolean; wide: boolea
         <form className="flex-1 flex items-center gap-2 h-11 rounded-(--r-ctl) bg-s3 px-3.5 focus-within:bg-s4 transition-colors"
           onSubmit={(e) => { e.preventDefault(); submit(q); }}>
           <ISearch size={17} className="text-mut shrink-0" />
-          <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder={isOpenListLibrary ? "按视频文件名搜索…" : "搜索短剧、作者、题材…"}
+          <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)}
+            aria-label="搜索关键词" placeholder={isOpenListLibrary ? "输入视频文件名、片名或资源编号…" : "搜索短剧、作者、题材…"}
             className="flex-1 min-w-0 bg-transparent text-[13.5px] text-on placeholder-dim outline-none" />
-          {q && <button type="button" onClick={() => { setQ(""); setSubmitted(""); setItems([]); }} className="w-5 h-5 rounded-full bg-s4 flex items-center justify-center text-mut pressable"><IClose size={11} /></button>}
+          {q && <button type="button" aria-label="清空搜索" onClick={() => { setQ(""); setSubmitted(""); setItems([]); setMagnetQuery(undefined); }} className="w-5 h-5 rounded-full bg-s4 flex items-center justify-center text-mut pressable"><IClose size={11} /></button>}
         </form>
+        {isOpenListLibrary && <button type="button" onClick={submitMagnet} disabled={magnetRunning}
+          className={`shrink-0 rounded-(--r-ctl) px-3 py-2 text-sm font-semibold pressable disabled:opacity-60 ${showMagnet ? "bg-primary text-on-primary" : "bg-s3 text-on"}`}>
+          {magnetRunning ? "搜索中…" : "搜索磁力"}
+        </button>}
         {!isOpenListLibrary && <button onClick={() => push({ kind: "ranks" })} aria-label="排行榜"
           className="w-11 h-11 rounded-(--r-sm) flex items-center justify-center bg-primary text-on-primary pressable elev-2">
           <ITrophy size={19} />
@@ -77,7 +104,22 @@ export default function Search({ active, wide }: { active: boolean; wide: boolea
       </div>
 
       <div className="flex-1 scroll-y px-4 pb-24">
-        {!querying ? (
+        {showMagnet ? (
+          !magnetQuery.term ? (
+            <section className="rounded-(--r-lg) bg-s1 p-4" aria-label="磁力搜索">
+              <h2 className="text-sm font-semibold">磁力搜索</h2>
+              <p className="mt-2 text-sm text-mut">在上方输入片名或资源编号，再点击「搜索磁力」。</p>
+            </section>
+          ) : user ? (
+            <MagnetSearch key={`${user.id}:${magnetQuery.id}`} query={magnetQuery.term} onRunningChange={setMagnetRunning} />
+          ) : (
+            <section className="rounded-(--r-lg) bg-s1 p-4" aria-label="磁力搜索">
+              <h2 className="text-sm font-semibold">磁力搜索</h2>
+              <p className="mb-3 mt-2 text-sm text-mut">登录后可在这里搜索磁力、选择资源。</p>
+              <button type="button" className="rounded-(--r-ctl) bg-s3 px-3 py-2 text-sm pressable" onClick={() => setLoginOpen(true)}>登录后搜索</button>
+            </section>
+          )
+        ) : !querying ? (
           <>
             {searchHist.length > 0 && (
               <div className="mt-1 a-rise">

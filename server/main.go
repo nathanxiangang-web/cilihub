@@ -19,6 +19,7 @@ import (
 
 	"github.com/nathanxiangang-web/cilihub/server/internal/adminapi"
 	"github.com/nathanxiangang-web/cilihub/server/internal/adminauth"
+	"github.com/nathanxiangang-web/cilihub/server/internal/cloudapi"
 	"github.com/nathanxiangang-web/cilihub/server/internal/commands"
 	"github.com/nathanxiangang-web/cilihub/server/internal/filmcatalog"
 	"github.com/nathanxiangang-web/cilihub/server/internal/media"
@@ -118,6 +119,19 @@ func main() {
 	deps.Shares = shareSvc
 
 	adminapi.Register(mux, adminDeps)
+	cloud, err := cloudapi.Register(mux, db, cloudapi.Config{
+		CookieFile:         os.Getenv("CILIHUB_115_COOKIE_FILE"),
+		PrivateRoot:        os.Getenv("CILIHUB_115_PRIVATE_ROOT"),
+		CollectorRoot:      os.Getenv("CILIHUB_115_COLLECTOR_ROOT"),
+		CollectorTokenFile: os.Getenv("CILIHUB_COLLECTOR_TOKEN_FILE"),
+		CDNHost:            os.Getenv("CILIHUB_115_CDN_HOST"),
+		MagcrawOrigin:      os.Getenv("CILIHUB_MAGCRAW_ORIGIN"),
+		MagcrawKeyFile:     os.Getenv("CILIHUB_MAGCRAW_KEY_FILE"),
+	}, logger)
+	if err != nil {
+		logger.Fatalf("云下载配置无效: %v", err)
+	}
+	go cloud.Run(context.Background())
 	commands.Register(mux, deps)
 	mux.Handle(media.Prefix+"/", mediaSvc.Handler())
 	// 比 /media/ 更具体，ServeMux 会优先匹配分享播放路由。

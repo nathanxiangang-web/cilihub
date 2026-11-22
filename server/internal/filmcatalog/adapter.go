@@ -332,7 +332,7 @@ func (a *Adapter) Diagnose(ctx context.Context, fileID int64) (Diagnostics, erro
 		}, err
 	}
 	diag := Diagnostics{
-		Catalog: DiagnosticCatalog{InSnapshot: ref.Present},
+		Catalog:  DiagnosticCatalog{InSnapshot: ref.Present},
 		Playback: DiagnosticPlayback{Mode: "error"},
 	}
 	started := time.Now()
@@ -391,6 +391,10 @@ func (a *Adapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		http.Error(w, "读取影片信息失败", http.StatusInternalServerError)
+		return
+	}
+	if store.IsCloudPrivatePath(ref.Path) {
+		http.Error(w, "视频不存在", http.StatusNotFound)
 		return
 	}
 	if !ref.Visible {
