@@ -55,10 +55,10 @@
 Web 播放界面来自 [MovieHub](https://github.com/nathanxiangang-web/moviehub/tree/830aa941714eeabc57be3ac24b98922bbca1a328)，OpenList 适配基于 [302test](https://github.com/nathanxiangang-web/302test/tree/aa96a1f5ece73d80d1e7e54d3d3c9f9913e3a929)。原项目 [HGhub](https://github.com/Minireel/HGhub) 的版权与发行要求见 [LICENSE](LICENSE)。项目仅限非商业使用。
 ## 私人云下载与运营采集
 
-登录用户可以从「我的」下方打开「云下载」，提交 BTIH 磁力链接并查看 115 排队、下载和索引状态。结果只列出 MP4，播放时按会话检查当前账号与任务的归属，再向配置的 115 CDN 返回 302。相同链接在同一账号下复用已有任务。若 115 账号已经存在相同哈希的任务，且目标目录属于其他空间，当前任务会显示冲突。
+登录用户可以从「我的」下方打开「云下载」，提交 BTIH 磁力链接并查看 115 排队、下载和索引状态。新任务直接下载到该用户的固定私人目录，按 115 返回的结果 ID 归属文件。下载完成后列出至少 100 MiB 的 MP4，并按文件及子目录名称排除广告。播放时按会话检查当前账号与任务的归属，再向配置的 115 CDN 返回 302。相同链接在同一账号下复用已有任务。若 115 账号已经存在相同哈希的任务，且目标目录属于其他空间，当前任务会显示冲突。
 
 服务端的 `cloudapi` 负责会话校验、队列推进和 115driver 适配，`store` 保存任务与文件索引，`filmcatalog` 通过保留目录前缀排除私人下载。运营采集程序独立部署，通过受令牌保护的任务接口提交并查询，完工后由 OpenList 定期同步运营目录的视频。
 
 配置 `CILIHUB_MAGCRAW_ORIGIN` 和 `CILIHUB_MAGCRAW_KEY_FILE` 后，用户可在「搜索」页用同一搜索框输入关键词并点击「搜索磁力」，结果直接在搜索页出现。CiliHub 服务端通过 magcraw 的任务接口查询结果，浏览器按当前登录账号回查自己的搜索。选中的磁力加入该账号的私人下载任务。两边使用同一个只读令牌文件，magcraw 通过 `CI_API_KEY_FILE` 加载。
 
-用 `docker compose -f compose.yaml -f compose.cloud.yaml up -d` 加载云下载配置。设置需要启用的 115 目录 ID，`CILIHUB_115_PRIVATE_ROOT` 对应私人下载，`CILIHUB_115_COLLECTOR_ROOT` 对应运营下载。两个空间使用不同目录。私人目录放在 OpenList 公开扫描根目录之外，运营目录映射到公开扫描根或其子目录。采集任务在运营目录下各用独立子目录，前台平铺其中的 MP4。把 115 凭据放在只读挂载目录的 `cookie` 文件中。启用运营时还需把至少 32 字符的共享令牌放在该目录的 `collector-token` 文件中。两个文件需允许容器用户 10001 读取。省略云下载覆盖文件可按原配置启动。
+用 `docker compose -f compose.yaml -f compose.cloud.yaml up -d` 加载云下载配置。设置需要启用的 115 目录 ID，`CILIHUB_115_PRIVATE_ROOT` 对应私人下载，`CILIHUB_115_COLLECTOR_ROOT` 对应运营下载。两个空间使用不同目录。私人目录放在 OpenList 公开扫描根目录之外，运营目录映射到公开扫描根或其子目录。新采集任务共用一个固定暂存目录，合格 MP4 在任务完成后移到运营目录，遇同名文件跳过。115 的链接提交接口没有文件勾选参数，过滤在下载完成后运行，落盘的小文件与广告由网盘管理。把 115 凭据放在只读挂载目录的 `cookie` 文件中。启用运营时还需把至少 32 字符的共享令牌放在该目录的 `collector-token` 文件中。两个文件需允许容器用户 10001 读取。省略云下载覆盖文件可按原配置启动。

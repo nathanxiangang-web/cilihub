@@ -23,15 +23,16 @@ type taskStore interface {
 }
 
 type remoteTask struct {
-	state   string
-	percent *float64
+	state, outputID string
+	percent         *float64
 }
 type provider interface {
-	folder(context.Context, int64, string) (string, error)
+	folder(context.Context, store.CloudTask) (string, error)
 	find(context.Context, string, string) (*remoteTask, bool, error)
 	submit(context.Context, string, string) error
-	files(context.Context, string) ([]store.CloudFile, error)
-	link(context.Context, string, store.CloudFile, string) (string, error)
+	files(context.Context, string, string) ([]store.CloudFile, error)
+	publish(context.Context, store.CloudTask) ([]store.CloudFile, error)
+	link(context.Context, string, string, store.CloudFile, string) (string, error)
 }
 
 type Service struct {
@@ -129,7 +130,7 @@ func (s *Service) advance(ctx context.Context, task store.CloudTask) {
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	if task.State == "queued" {
-		folder, err := s.source.folder(ctx, task.Owner, task.Key)
+		folder, err := s.source.folder(ctx, task)
 		if err != nil {
 			s.update(task, "queued", "等待 115 创建下载目录")
 			return
@@ -160,7 +161,11 @@ func (s *Service) advance(ctx context.Context, task store.CloudTask) {
 		s.update(task, "provider_queued", "已提交，请过几分钟刷新")
 		return
 	}
-	if task.State == "indexing" {
+	if task.State == "publishing" {
+		s.publish(ctx, task)
+		return
+	}
+	if task.State == "indexing" && (!task.SharedFolder || task.OutputID != "") {
 		s.index(ctx, task)
 		return
 	}
@@ -180,6 +185,13 @@ func (s *Service) applyRemote(ctx context.Context, task store.CloudTask, remote 
 	task.Progress = remote.percent
 	switch remote.state {
 	case "done":
+		if task.SharedFolder {
+			if !idPattern.MatchString(remote.outputID) || remote.outputID == task.Folder {
+				s.update(task, "indexing", "115 已完成，等待返回本任务的文件编号")
+				return
+			}
+			task.OutputID = remote.outputID
+		}
 		if s.update(task, "indexing", "115 下载完成，正在读取 MP4") {
 			task.State = "indexing"
 			s.index(ctx, task)
@@ -196,19 +208,45 @@ func (s *Service) applyRemote(ctx context.Context, task store.CloudTask, remote 
 }
 
 func (s *Service) index(ctx context.Context, task store.CloudTask) {
-	files, err := s.source.files(ctx, task.Folder)
+	files, err := s.source.files(ctx, task.Folder, task.OutputID)
 	if err != nil {
+		if errors.Is(err, errOutputPending) {
+			s.update(task, "indexing", "115 已完成，目标目录暂未出现本任务文件")
+			return
+		}
 		s.update(task, "indexing", "暂时无法读取下载结果，稍后刷新")
 		return
 	}
 	task.Files = []store.CloudFile{}
 	for _, file := range files {
-		if strings.HasSuffix(strings.ToLower(file.Name), ".mp4") {
+		if eligibleCloudFile(file.Name, file.Size) {
 			task.Files = append(task.Files, file)
 		}
 	}
 	if len(task.Files) == 0 {
-		s.update(task, "no_mp4", "下载完成，未找到 MP4")
+		s.update(task, "no_mp4", "下载完成，未找到符合条件的 MP4")
+		return
+	}
+	if task.SharedFolder && task.Owner == 0 {
+		// Save the selected files before moving any of them so recovery can resume the same list.
+		if s.update(task, "publishing", "正在整理合格的 MP4") {
+			task.State = "publishing"
+			s.publish(ctx, task)
+		}
+		return
+	}
+	s.update(task, "ready", "下载完成")
+}
+
+func (s *Service) publish(ctx context.Context, task store.CloudTask) {
+	files, err := s.source.publish(ctx, task)
+	if err != nil {
+		s.update(task, "publishing", "整理暂未完成，稍后继续")
+		return
+	}
+	task.Files = files
+	if len(files) == 0 {
+		s.update(task, "no_mp4", "合格的 MP4 在目标目录已有同名文件")
 		return
 	}
 	s.update(task, "ready", "下载完成")

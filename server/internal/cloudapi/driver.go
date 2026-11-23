@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,10 +19,13 @@ import (
 )
 
 var (
-	errProvider = errors.New("115 请求失败")
-	idPattern   = regexp.MustCompile("^[1-9][0-9]{0,23}$")
-	hostPattern = regexp.MustCompile("^[a-z0-9.-]+$")
+	errProvider      = errors.New("115 请求失败")
+	errOutputPending = errors.New("115 结果尚未出现在目标目录")
+	idPattern        = regexp.MustCompile("^[1-9][0-9]{0,23}$")
+	hostPattern      = regexp.MustCompile("^[a-z0-9.-]+$")
 )
+
+const collectorInbox = store.CloudPrivatePrefix + "collector-inbox"
 
 func newService(db taskStore, cfg Config, logger *log.Logger) (*Service, error) {
 	s := &Service{db: db, logger: logger}
@@ -74,17 +76,20 @@ type sdk struct {
 	mu                              sync.Mutex
 }
 
-func (s *sdk) folder(ctx context.Context, owner int64, key string) (string, error) {
+func (s *sdk) folder(ctx context.Context, task store.CloudTask) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if owner == 0 {
-		return s.ensure(ctx, s.collectorRoot, store.CloudCollectorPrefix+key)
+	if task.Owner == 0 {
+		if task.SharedFolder {
+			return s.ensure(ctx, s.collectorRoot, collectorInbox)
+		}
+		return s.ensure(ctx, s.collectorRoot, store.CloudCollectorPrefix+task.Key)
 	}
-	parent, err := s.ensure(ctx, s.privateRoot, store.CloudPrivatePrefix+strconv.FormatInt(owner, 10))
-	if err != nil {
-		return "", err
+	parent, err := s.ensure(ctx, s.privateRoot, store.CloudPrivatePrefix+strconv.FormatInt(task.Owner, 10))
+	if err != nil || task.SharedFolder {
+		return parent, err
 	}
-	return s.ensure(ctx, parent, "task-"+key)
+	return s.ensure(ctx, parent, "task-"+task.Key)
 }
 
 func (s *sdk) ensure(ctx context.Context, parent, name string) (string, error) {
@@ -166,6 +171,7 @@ func (s *sdk) find(ctx context.Context, hash, folder string) (*remoteTask, bool,
 				}
 			case t.IsDone():
 				remote.state = "done"
+				remote.outputID = t.FileId
 				percent := 100.0
 				remote.percent = &percent
 			case t.IsFailed():
@@ -197,10 +203,41 @@ func (s *sdk) submit(ctx context.Context, magnet, folder string) error {
 	return nil
 }
 
-func (s *sdk) files(ctx context.Context, folder string) ([]store.CloudFile, error) {
+func (s *sdk) files(ctx context.Context, folder, outputID string) ([]store.CloudFile, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.walk(ctx, folder)
+	return s.readResults(ctx, folder, outputID)
+}
+
+func (s *sdk) readResults(ctx context.Context, folder, outputID string) ([]store.CloudFile, error) {
+	if outputID == "" {
+		return s.walk(ctx, folder)
+	}
+	if outputID == folder || !idPattern.MatchString(outputID) {
+		return nil, errProvider
+	}
+	// ListPage reliably reports directory IDs and parents. GetFile may reject folders.
+	children, err := s.children(ctx, folder)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range children {
+		if entry.FileID != outputID {
+			continue
+		}
+		if entry.IsDirectory && !isAdvert(entry.Name) {
+			return s.walk(ctx, entry.FileID)
+		}
+		if !entry.IsDirectory && eligibleCloudFile(entry.Name, entry.Size) && entry.PickCode != "" {
+			return []store.CloudFile{cloudFile(entry)}, nil
+		}
+		return nil, nil
+	}
+	return nil, errOutputPending
+}
+
+func cloudFile(f driver.File) store.CloudFile {
+	return store.CloudFile{ID: f.FileID, Name: f.Name, Size: f.Size, PickCode: f.PickCode}
 }
 
 func (s *sdk) walk(ctx context.Context, folder string) ([]store.CloudFile, error) {
@@ -219,36 +256,98 @@ func (s *sdk) walk(ctx context.Context, folder string) ([]store.CloudFile, error
 			}
 			seen[f.FileID] = true
 			if f.IsDirectory {
-				queue = append(queue, f.FileID)
-			} else if strings.EqualFold(path.Ext(f.Name), ".mp4") && f.PickCode != "" {
-				files = append(files, store.CloudFile{ID: f.FileID, Name: f.Name, Size: f.Size, PickCode: f.PickCode})
+				if !isAdvert(f.Name) {
+					queue = append(queue, f.FileID)
+				}
+			} else if eligibleCloudFile(f.Name, f.Size) && f.PickCode != "" {
+				files = append(files, cloudFile(f))
 			}
 		}
 	}
 	return files, nil
 }
 
-func (s *sdk) link(ctx context.Context, folder string, file store.CloudFile, ua string) (string, error) {
+func (s *sdk) publish(ctx context.Context, task store.CloudTask) ([]store.CloudFile, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if ctx.Err() != nil {
-		return "", ctx.Err()
+	if task.Owner != 0 || !task.SharedFolder || !idPattern.MatchString(task.OutputID) || task.Folder == s.collectorRoot {
+		return nil, errProvider
 	}
-	// Revalidate the current file and its entire parent chain before redirecting.
-	id := file.ID
-	for depth := 0; depth < 64 && id != folder; depth++ {
-		if !idPattern.MatchString(id) || ctx.Err() != nil {
-			return "", errProvider
-		}
-		entry, err := s.client.GetFile(id)
-		if err != nil || entry == nil || entry.FileID != id ||
-			(depth == 0 && (entry.IsDirectory || entry.PickCode != file.PickCode || !strings.EqualFold(path.Ext(entry.Name), ".mp4"))) ||
-			(depth > 0 && !entry.IsDirectory) {
-			return "", errProvider
-		}
-		id = entry.ParentID
+	destination, err := s.children(ctx, s.collectorRoot)
+	if err != nil {
+		return nil, err
 	}
-	if id != folder || id == file.ID || ctx.Err() != nil {
+	names := make(map[string]bool, len(destination))
+	existing := make(map[string]driver.File, len(destination))
+	for _, f := range destination {
+		names[strings.ToLower(f.Name)] = true
+		existing[f.FileID] = f
+	}
+	if inbox, ok := existing[task.Folder]; !ok || !inbox.IsDirectory || inbox.Name != collectorInbox {
+		return nil, errProvider
+	}
+	var result []store.CloudFile
+	var source map[string]store.CloudFile
+	for _, f := range task.Files {
+		if entry, ok := existing[f.ID]; ok {
+			if entry.IsDirectory || !sameCloudFile(cloudFile(entry), f) {
+				return nil, errProvider
+			}
+			result = append(result, cloudFile(entry))
+			continue
+		}
+		if names[strings.ToLower(f.Name)] {
+			continue
+		}
+		if source == nil {
+			files, err := s.readResults(ctx, task.Folder, task.OutputID)
+			if err != nil {
+				return nil, err
+			}
+			source = make(map[string]store.CloudFile, len(files))
+			for _, item := range files {
+				source[item.ID] = item
+			}
+		}
+		if !sameCloudFile(source[f.ID], f) {
+			return nil, errProvider
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if err := s.client.Move(s.collectorRoot, f.ID); err != nil {
+			return nil, errProvider
+		}
+		moved, err := s.client.GetFile(f.ID)
+		if err != nil || moved == nil || moved.IsDirectory || moved.ParentID != s.collectorRoot || !sameCloudFile(cloudFile(*moved), f) {
+			return nil, errProvider
+		}
+		names[strings.ToLower(moved.Name)] = true
+		result = append(result, cloudFile(*moved))
+	}
+	return result, nil
+}
+
+func sameCloudFile(entry, f store.CloudFile) bool {
+	return entry.ID == f.ID && entry.PickCode == f.PickCode && f.PickCode != "" &&
+		entry.Size == f.Size && entry.Name == f.Name && eligibleCloudFile(entry.Name, entry.Size)
+}
+
+func (s *sdk) link(ctx context.Context, folder, outputID string, file store.CloudFile, ua string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	files, err := s.readResults(ctx, folder, outputID)
+	if err != nil {
+		return "", errProvider
+	}
+	matched := false
+	for _, item := range files {
+		if sameCloudFile(item, file) {
+			matched = true
+			break
+		}
+	}
+	if !matched || ctx.Err() != nil {
 		return "", errProvider
 	}
 	download, err := s.client.DownloadWithUA(file.PickCode, ua)

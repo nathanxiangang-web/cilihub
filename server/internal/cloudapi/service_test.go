@@ -23,24 +23,33 @@ type test115 struct {
 	matched     bool
 	state       string
 	output      []store.CloudFile
+	outputID    string
 }
 
-func (p *test115) folder(_ context.Context, owner int64, key string) (string, error) {
-	return strconv.FormatInt(owner, 10) + "/" + key, nil
+func (p *test115) folder(_ context.Context, task store.CloudTask) (string, error) {
+	return strconv.FormatInt(task.Owner, 10), nil
 }
 func (p *test115) find(_ context.Context, _, _ string) (*remoteTask, bool, error) {
 	if !p.matched {
 		return nil, false, nil
 	}
 	progress := 63.5
-	return &remoteTask{state: p.state, percent: &progress}, false, nil
+	return &remoteTask{state: p.state, percent: &progress, outputID: p.outputID}, false, nil
 }
 func (p *test115) submit(_ context.Context, _, _ string) error {
 	p.submissions++
 	return errors.New("simulated lost response")
 }
-func (p *test115) files(_ context.Context, _ string) ([]store.CloudFile, error) { return p.output, nil }
-func (p *test115) link(_ context.Context, folder string, file store.CloudFile, _ string) (string, error) {
+func (p *test115) files(_ context.Context, _, outputID string) ([]store.CloudFile, error) {
+	if outputID != p.outputID || outputID == "" {
+		return nil, errors.New("missing per-task result")
+	}
+	return p.output, nil
+}
+func (p *test115) publish(_ context.Context, task store.CloudTask) ([]store.CloudFile, error) {
+	return task.Files, nil
+}
+func (p *test115) link(_ context.Context, folder, _ string, file store.CloudFile, _ string) (string, error) {
 	if folder == "" || file.PickCode == "" {
 		return "", errors.New("missing provider file")
 	}
@@ -132,10 +141,20 @@ func TestCloudDownloadFlow(t *testing.T) {
 		t.Fatal(rr.Body.String())
 	}
 	provider.state = "done"
-	provider.output = []store.CloudFile{{ID: "11", Name: "story.MP4", PickCode: "provider-secret"}, {Name: "notes.txt"}}
+	service.tick(context.Background())
+	if rr := call("GET", privatePath, "", first, false, 200); !strings.Contains(rr.Body.String(), `"state":"indexing"`) {
+		t.Fatal(rr.Body.String())
+	}
+	provider.outputID = "987"
+	provider.output = []store.CloudFile{
+		{ID: "11", Name: "story.MP4", Size: minCloudFileBytes, PickCode: "provider-secret"},
+		{Name: "notes.txt"}, {Name: "short.mp4", Size: minCloudFileBytes - 1},
+		{Name: "发布页.mp4", Size: minCloudFileBytes},
+	}
 	service.tick(context.Background())
 	list := call("GET", privatePath, "", first, false, 200).Body.String()
-	if !strings.Contains(list, "story.MP4") || strings.Contains(list, "notes.txt") || strings.Contains(list, "provider-secret") {
+	if !strings.Contains(list, "story.MP4") || strings.Contains(list, "notes.txt") || strings.Contains(list, "short.mp4") ||
+		strings.Contains(list, "发布页.mp4") || strings.Contains(list, "provider-secret") {
 		t.Fatal(list)
 	}
 	if rr := call("GET", play, "", first, false, 302); rr.Header().Get("Location") != "https://test.115cdn.net/signed-video" ||

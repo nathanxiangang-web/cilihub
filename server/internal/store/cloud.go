@@ -39,6 +39,8 @@ type CloudFile struct {
 type CloudTask struct {
 	ID, Owner                                                  int64
 	Hash, Magnet, Identity, Title, Key, Folder, State, Message string
+	SharedFolder                                               bool
+	OutputID                                                   string
 	Progress                                                   *float64
 	Files                                                      []CloudFile
 }
@@ -51,18 +53,20 @@ var cloudSchema = []string{
  state TEXT NOT NULL DEFAULT 'queued', message TEXT NOT NULL DEFAULT '', progress DOUBLE PRECISION,
  files JSONB NOT NULL DEFAULT '[]', updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  UNIQUE(owner_id,info_hash))`,
+	`ALTER TABLE cloud_tasks ADD COLUMN IF NOT EXISTS shared_folder BOOLEAN NOT NULL DEFAULT FALSE`,
+	`ALTER TABLE cloud_tasks ADD COLUMN IF NOT EXISTS output_id TEXT NOT NULL DEFAULT ''`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS cloud_tasks_active_identity ON cloud_tasks(owner_id,identity)
  WHERE identity <> '' AND state NOT IN ('failed','no_mp4')`,
 	`CREATE INDEX IF NOT EXISTS cloud_tasks_pending ON cloud_tasks(updated_at,id)
  WHERE state IN ('queued','submitting','provider_queued','downloading','indexing','uncertain')`,
 }
 
-const cloudColumns = `id,owner_id,info_hash,magnet,identity,title,folder_key,folder_id,state,message,progress,files`
+const cloudColumns = `id,owner_id,info_hash,magnet,identity,title,folder_key,folder_id,state,message,shared_folder,output_id,progress,files`
 
 func scanCloud(row interface{ Scan(...any) error }) (CloudTask, error) {
 	var task CloudTask
 	var files []byte
-	err := row.Scan(&task.ID, &task.Owner, &task.Hash, &task.Magnet, &task.Identity, &task.Title, &task.Key, &task.Folder, &task.State, &task.Message, &task.Progress, &files)
+	err := row.Scan(&task.ID, &task.Owner, &task.Hash, &task.Magnet, &task.Identity, &task.Title, &task.Key, &task.Folder, &task.State, &task.Message, &task.SharedFolder, &task.OutputID, &task.Progress, &files)
 	if errors.Is(err, sql.ErrNoRows) {
 		return task, ErrNotFound
 	}
@@ -77,8 +81,8 @@ func (s *Store) QueueCloud(owner int64, hash, magnet, identity, title string) (C
 	if _, err := rand.Read(key[:]); err != nil {
 		return CloudTask{}, false, err
 	}
-	task, err := scanCloud(s.db.QueryRow(`INSERT INTO cloud_tasks(owner_id,info_hash,magnet,identity,title,folder_key)
- VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING RETURNING `+cloudColumns, owner, hash, magnet, identity, title, hex.EncodeToString(key[:])))
+	task, err := scanCloud(s.db.QueryRow(`INSERT INTO cloud_tasks(owner_id,info_hash,magnet,identity,title,folder_key,shared_folder)
+ VALUES($1,$2,$3,$4,$5,$6,TRUE) ON CONFLICT DO NOTHING RETURNING `+cloudColumns, owner, hash, magnet, identity, title, hex.EncodeToString(key[:])))
 	if !errors.Is(err, ErrNotFound) {
 		return task, err == nil, err
 	}
@@ -97,7 +101,7 @@ func (s *Store) CloudTasks(owner, before int64) ([]CloudTask, error) {
 }
 
 func (s *Store) PendingCloud() ([]CloudTask, error) {
-	return s.cloudRows(`SELECT ` + cloudColumns + ` FROM cloud_tasks WHERE state IN ('queued','submitting','provider_queued','downloading','indexing','uncertain') ORDER BY updated_at,id LIMIT 32`)
+	return s.cloudRows(`SELECT ` + cloudColumns + ` FROM cloud_tasks WHERE state IN ('queued','submitting','provider_queued','downloading','indexing','publishing','uncertain') ORDER BY updated_at,id LIMIT 32`)
 }
 
 func (s *Store) cloudRows(query string, args ...any) ([]CloudTask, error) {
@@ -125,7 +129,7 @@ func (s *Store) UpdateCloud(task CloudTask, next, message string) (bool, error) 
 	if err != nil {
 		return false, err
 	}
-	res, err := s.db.Exec(`UPDATE cloud_tasks SET state=$2,folder_id=$3,progress=$4,files=$5::jsonb,message=$6,updated_at=now() WHERE id=$1 AND state=$7`, task.ID, next, task.Folder, task.Progress, string(files), message, task.State)
+	res, err := s.db.Exec(`UPDATE cloud_tasks SET state=$2,folder_id=$3,progress=$4,files=$5::jsonb,message=$6,updated_at=now(),output_id=$8 WHERE id=$1 AND state=$7`, task.ID, next, task.Folder, task.Progress, string(files), message, task.State, task.OutputID)
 	if err != nil {
 		return false, err
 	}

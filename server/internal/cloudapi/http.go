@@ -106,12 +106,21 @@ type fileView struct {
 
 func view(task store.CloudTask) taskView {
 	out := taskView{task.ID, task.State, task.Message, task.Title, task.Progress, []fileView{}}
+	if task.State != "ready" {
+		return out
+	}
 	for i, f := range task.Files {
+		if !eligibleCloudFile(f.Name, f.Size) {
+			continue
+		}
 		file := fileView{Name: f.Name, Size: f.Size}
 		if task.Owner > 0 {
 			file.URL = fmt.Sprintf("%s/%d/files/%d", privatePath, task.ID, i)
 		}
 		out.Files = append(out.Files, file)
+	}
+	if len(out.Files) == 0 {
+		out.Message = "下载完成，未找到符合条件的 MP4"
 	}
 	return out
 }
@@ -157,7 +166,7 @@ func (s *Service) queue(w http.ResponseWriter, r *http.Request, owner int64) {
 		return
 	}
 	if request.Title == "" {
-		request.Title = "磁力任务 " + hash[:8]
+		request.Title = "磁力下载"
 	}
 	task, created, err := s.db.QueueCloud(owner, hash, magnet, request.Identity, request.Title)
 	if err != nil {
@@ -215,7 +224,7 @@ func (s *Service) play(w http.ResponseWriter, r *http.Request, owner int64) {
 		return
 	}
 	i, err := strconv.Atoi(r.PathValue("index"))
-	if err != nil || i < 0 || i >= len(t.Files) || t.State != "ready" {
+	if err != nil || i < 0 || i >= len(t.Files) || t.State != "ready" || !eligibleCloudFile(t.Files[i].Name, t.Files[i].Size) {
 		fail(w, 404, "找不到视频")
 		return
 	}
@@ -225,7 +234,7 @@ func (s *Service) play(w http.ResponseWriter, r *http.Request, owner int64) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	target, err := s.source.link(ctx, t.Folder, t.Files[i], r.UserAgent())
+	target, err := s.source.link(ctx, t.Folder, t.OutputID, t.Files[i], r.UserAgent())
 	if err != nil {
 		fail(w, 502, "暂时无法获取 115 播放地址")
 		return

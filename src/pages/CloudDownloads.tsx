@@ -83,7 +83,7 @@ function PrivateDownloads({ active }: { active: boolean }) {
           {busy ? "提交中…" : "提交云下载"}
         </button>
       </div>
-      <p className="mt-2 text-xs text-mut">任务仅当前账号可见。下载完成后显示 MP4 文件。</p>
+      <p className="mt-2 text-xs text-mut">下载完成后可播放至少 100 MiB 的 MP4，广告文件会过滤。</p>
       {data && !data.enabled && <p className="mt-2 text-sm text-mut">此实例尚未启用 115 云下载。</p>}
     </form>
 
